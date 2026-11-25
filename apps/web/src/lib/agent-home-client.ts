@@ -67,8 +67,42 @@ export interface OpenBotResponse {
   createdSession?: boolean;
 }
 
+interface BotListResponse {
+  bots?: { id: string; name?: string; title?: string }[];
+}
+
+const resolvedBotIds = new Map<string, string>();
+
+async function resolveBotId(botKey: string, signal?: AbortSignal): Promise<string> {
+  const cached = resolvedBotIds.get(botKey);
+  if (cached) return cached;
+  const list = await ahJson<BotListResponse>('/api/bots?includeHidden=1', { signal });
+  const bots = Array.isArray(list.bots) ? list.bots : [];
+  for (const b of bots) {
+    if (b.id) resolvedBotIds.set(b.id, b.id);
+    if (b.name && b.id) resolvedBotIds.set(b.name, b.id);
+  }
+  const hit = bots.find((b) => b.id === botKey || b.name === botKey);
+  if (!hit?.id) throw new AgentHomeError(404, `HTTP 404 · Bot not found: ${botKey}`);
+  return hit.id;
+}
+
 export const agentHome = {
-  openBot: (botId: string, signal?: AbortSignal) => ahJson<OpenBotResponse>(`/api/bots/${encodeURIComponent(botId)}/open`, { method: 'POST', body: {}, signal }),
+  openBot: async (botId: string, signal?: AbortSignal): Promise<OpenBotResponse> => {
+    const cached = resolvedBotIds.get(botId);
+    if (cached) {
+      return ahJson<OpenBotResponse>(`/api/bots/${encodeURIComponent(cached)}/open`, { method: 'POST', body: {}, signal });
+    }
+    try {
+      const res = await ahJson<OpenBotResponse>(`/api/bots/${encodeURIComponent(botId)}/open`, { method: 'POST', body: {}, signal });
+      if (res.bot?.id) resolvedBotIds.set(botId, res.bot.id);
+      return res;
+    } catch (err) {
+      if (!(err instanceof AgentHomeError) || err.status !== 404) throw err;
+      const realId = await resolveBotId(botId, signal);
+      return ahJson<OpenBotResponse>(`/api/bots/${encodeURIComponent(realId)}/open`, { method: 'POST', body: {}, signal });
+    }
+  },
 
   session: (sessionId: string, messageLimit = 30, signal?: AbortSignal) =>
     ahJson<Record<string, unknown>>(`/api/sessions/${encodeURIComponent(sessionId)}?messageLimit=${messageLimit}`, { signal }),
