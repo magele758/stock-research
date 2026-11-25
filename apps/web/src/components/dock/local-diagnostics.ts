@@ -3,11 +3,12 @@
  * Used when Agent Home is offline (or the bot is not registered). Nothing here
  * invents numbers: every figure is taken from the response being summarized.
  */
-import { BASIC_CATALOG, buildSurfaceEnvelopes } from '@/lib/a2ui';
+import { BASIC_CATALOG, QUANT_CATALOG, buildSurfaceEnvelopes } from '@/lib/a2ui';
 import { fx, isNum, ratioPct, sg } from '@/lib/format';
 import { BARRA_HARD_LIMIT } from '@/lib/meta';
 import { normalizeGateChecks } from '@/lib/quant-api';
 import type { CpcvResult, FactorDecayItem, FactorEvalResult, OptConstraints, PortfolioOptResult } from '@/lib/types';
+import type { GlossaryTerm, TermQuery } from '@/lib/glossary/types';
 
 export type SurfaceBatch = ReturnType<typeof buildSurfaceEnvelopes>;
 
@@ -237,5 +238,81 @@ export function routeCard(surfaceId: string, title: string, body: string, button
     { id: 'body', component: 'Text', text: body },
     { id: 'actions', component: 'Row', children: buttons.map((_, i) => `b${i}`) },
     ...buttons.map((b, i) => ({ id: `b${i}`, component: 'Button', label: b.label, primary: b.primary, action: { name: b.action, context: b.context, sendDataModel: false } }))
+  ]);
+}
+
+// ------------------------------------------------------------------ V3 · glossary term card (offline explain)
+
+export function termBotText(term: GlossaryTerm, q: TermQuery | null): string {
+  const lines = [`**${term.zh}** (${term.en}) · ${term.domain}`, term.plain];
+  const red = q?.threshold ?? term.redline;
+  if (red) lines.push(`机构红线：${red}`);
+  if (q && (q.display || (q.value !== undefined && q.value !== null))) {
+    lines.push(`当前 ${q.view.toUpperCase()} 实测：\`${q.display ?? String(q.value)}\` → **${q.verdict ?? 'N/A'}**${q.gap ? `（${q.gap}）` : ''}`);
+  }
+  if (term.pitfalls.length) lines.push(`常见陷阱：${term.pitfalls.slice(0, 2).join('；')}`);
+  lines.push('_LOCAL 术语库确定性解读（未经 LLM）；启动 Agent Home 后可由 Quant-Lead 结合全部画布上下文深入分析。_');
+  return lines.join('\n');
+}
+
+export function termCard(surfaceId: string, term: GlossaryTerm): SurfaceBatch {
+  const related = term.related.slice(0, 3);
+  return buildSurfaceEnvelopes(surfaceId, BASIC_CATALOG, {}, [
+    { id: 'root', component: 'Card', child: 'col' },
+    { id: 'col', component: 'Column', children: ['title', 'body', 'actions'] },
+    { id: 'title', component: 'Text', text: `术语 · ${term.zh}`, usageHint: 'h4' },
+    { id: 'body', component: 'Text', text: term.formula.length ? `公式见术语库卡片（${term.formula.length} 行）。相关：${related.join(' / ') || '—'}` : `相关：${related.join(' / ') || '—'}` },
+    { id: 'actions', component: 'Row', children: ['b_open', ...related.map((_, i) => `b_r${i}`)] },
+    { id: 'b_open', component: 'Button', label: '在术语库打开', primary: true, action: { name: 'quant.explain_term', context: { term_id: term.id, open: 'glossary' }, sendDataModel: false } },
+    ...related.map((r, i) => ({ id: `b_r${i}`, component: 'Button', label: r, action: { name: 'quant.explain_term', context: { term_id: r }, sendDataModel: false } }))
+  ]);
+}
+
+// ------------------------------------------------------------------ V3 · study card (A2UI QuantStudyCard)
+
+export interface StudyCardInput {
+  title: string;
+  study_id?: string | null;
+  parent_study_id?: string | null;
+  status?: string;
+  verdict?: string;
+  kind?: string;
+  hypothesis?: string;
+  target_cluster?: string;
+  metrics?: { label: string; value: string }[];
+  proofs?: string;
+  warnings?: string[];
+}
+
+export function studyCard(surfaceId: string, s: StudyCardInput, draft?: Record<string, unknown>): SurfaceBatch {
+  const buttons: { id: string; label: string; action: string; context: Record<string, unknown>; primary?: boolean }[] = [];
+  if (s.study_id) buttons.push({ id: 'b_open', label: '打开研究报告', action: 'quant.open_study', context: { study_id: s.study_id }, primary: true });
+  buttons.push({
+    id: 'b_spawn',
+    label: s.study_id ? '创建迭代子研究' : '在抽屉中编辑并派发',
+    action: 'quant.spawn_child_study',
+    context: { ...(draft ?? {}), ...(s.study_id ? { parent_study_id: s.study_id } : {}) },
+    primary: !s.study_id
+  });
+  return buildSurfaceEnvelopes(surfaceId, QUANT_CATALOG, {}, [
+    { id: 'root', component: 'Card', child: 'col' },
+    { id: 'col', component: 'Column', children: ['study', 'actions'] },
+    {
+      id: 'study',
+      component: 'QuantStudyCard',
+      title: s.title,
+      study_id: s.study_id ?? null,
+      parent_study_id: s.parent_study_id ?? null,
+      status: s.status ?? 'DRAFT',
+      verdict: s.verdict ?? 'PENDING',
+      kind: s.kind ?? 'factor',
+      hypothesis: s.hypothesis ?? '',
+      target_cluster: s.target_cluster ?? 'engine_sandbox',
+      metrics: s.metrics ?? [],
+      proofs: s.proofs ?? null,
+      warnings: s.warnings ?? []
+    },
+    { id: 'actions', component: 'Row', children: buttons.map((b) => b.id) },
+    ...buttons.map((b) => ({ id: b.id, component: 'Button', label: b.label, primary: b.primary, action: { name: b.action, context: b.context, sendDataModel: false } }))
   ]);
 }

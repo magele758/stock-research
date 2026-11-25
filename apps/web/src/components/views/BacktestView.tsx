@@ -13,6 +13,11 @@ import { LineChart } from '../charts/LineChart';
 import { BarChart } from '../charts/BarChart';
 import { REGIME_BANDS } from '../charts/core';
 import { Waterfall, type WaterfallItem } from '../charts/Waterfall';
+import { TermTip } from '../glossary/TermTip';
+import { CapacitySection } from '../proof/CapacitySection';
+import { InvariantStrip } from '../proof/InvariantStrip';
+import { GATE_SPECS, judge, UI_LIMITS, verdictTone } from '@/lib/thresholds';
+import { normInvariants } from '@/lib/v3';
 
 const ENGINES: { key: BacktestEngineMode; label: string }[] = [
   { key: 'screening', label: '向量化快筛' },
@@ -22,9 +27,12 @@ const ENGINES: { key: BacktestEngineMode; label: string }[] = [
 /** Drawdowns may arrive signed or as magnitudes; always rendered as −|v|. */
 const negPct = (v: number | null | undefined, d = 2) => (isNum(v) ? `-${fx(Math.abs(v), d)}%` : '—');
 const abs = (v: number) => (isNum(v) ? Math.abs(v) : 0);
-const closureTag = (bp: number) => (isNum(bp) && Math.abs(bp) < 1 ? <Tag tone="pass">PASS</Tag> : <Tag tone="warn">WARN</Tag>);
+const closureTag = (bp: number) => {
+  const v = judge(GATE_SPECS.closure_error, bp).verdict;
+  return <Tag tone={verdictTone(v)}>{v}</Tag>;
+};
 
-function AttrTable({ head, rows, closureBp }: { head: string; rows: [string, number, string][]; closureBp: number }) {
+function AttrTable({ head, rows, closureBp }: { head: string; rows: [string, number, string, string?][]; closureBp: number }) {
   const total = sum(rows.map(([, v]) => (isNum(v) ? v : 0)));
   const absTot = sum(rows.map(([, v]) => abs(v)));
   return (
@@ -37,11 +45,19 @@ function AttrTable({ head, rows, closureBp }: { head: string; rows: [string, num
         </tr>
       </thead>
       <tbody>
-        {rows.map(([n, v, cl]) => {
+        {rows.map(([n, v, cl, term]) => {
           const sh = absTot > 0 ? (abs(v) / absTot) * 100 : 0;
           return (
             <tr key={n}>
-              <td>{n}</td>
+              <td>
+                {term ? (
+                  <TermTip id={term} display={`${sg(v, 2)}%`}>
+                    {n}
+                  </TermTip>
+                ) : (
+                  n
+                )}
+              </td>
               <td className={`n ${v >= 0 ? 'c-up' : 'c-dn'}`}>{sg(v, 2)}%</td>
               <td className="n">
                 {fx(sh, 1)}%<span className="bar-in" style={{ width: Math.max(1, sh * 0.4), background: cl }} />
@@ -59,7 +75,11 @@ function AttrTable({ head, rows, closureBp }: { head: string; rows: [string, num
           <td className="n c-3">100.0%</td>
         </tr>
         <tr>
-          <td className="sub">闭合误差</td>
+          <td className="sub">
+            <TermTip id="closure_error" value={closureBp} context={{ table: head }}>
+              闭合误差
+            </TermTip>
+          </td>
           <td className="n">{fx(closureBp, 2)} bp</td>
           <td className="n">{closureTag(closureBp)}</td>
         </tr>
@@ -100,9 +120,9 @@ function AttributionBody({ a }: { a: AttributionResult }) {
             head="Brinson-Fachler"
             closureBp={a.brinson_closure_error_bp}
             rows={[
-              ['配置效应 Allocation', a.brinson_allocation_pct, 'var(--tx3)'],
-              ['选股效应 Selection', a.brinson_selection_pct, 'var(--sig)'],
-              ['交互效应 Interaction', a.brinson_interaction_pct, 'var(--line2)']
+              ['配置效应 Allocation', a.brinson_allocation_pct, 'var(--tx3)', 'brinson_allocation'],
+              ['选股效应 Selection', a.brinson_selection_pct, 'var(--sig)', 'brinson_selection'],
+              ['交互效应 Interaction', a.brinson_interaction_pct, 'var(--line2)', 'brinson_interaction']
             ]}
           />
         </div>
@@ -111,10 +131,10 @@ function AttributionBody({ a }: { a: AttributionResult }) {
             head="Barra 因子归因"
             closureBp={a.barra_closure_error_bp}
             rows={[
-              ['风格 Beta', a.barra_style_pct, 'var(--warn)'],
+              ['风格 Beta', a.barra_style_pct, 'var(--warn)', 'style_exposure'],
               ['行业', a.barra_industry_pct, 'var(--tx3)'],
-              ['特质 Alpha', a.barra_specific_alpha_pct, 'var(--sig)'],
-              ['交易成本', a.barra_cost_pct, 'var(--dn)']
+              ['特质 Alpha', a.barra_specific_alpha_pct, 'var(--sig)', 'barra_attribution'],
+              ['交易成本', a.barra_cost_pct, 'var(--dn)', 'stamp_duty']
             ]}
           />
         </div>
@@ -194,7 +214,7 @@ export function BacktestView() {
       <Kpi label="年化收益" value={r ? sg(r.ann_return_pct, 2) + '%' : '—'} sub={dateSpan ? <span>{dateSpan}</span> : null} />
       <Kpi label={`基准收益 ${um.bench}`} value={r ? sg(r.bench_ann_return_pct, 2) + '%' : '—'} sub={<span>{um.label}</span>} />
       <Kpi
-        label="年化超额 Alpha"
+        label={<TermTip id="gross_vs_net" display={r ? sg(r.net_excess_ann_pct, 2) + '%' : undefined} context={{ engine: r?.engine ?? null }}>年化超额 Alpha</TermTip>}
         value={r ? sg(r.net_excess_ann_pct, 2) + '%' : '—'}
         sub={
           r ? (
@@ -212,14 +232,14 @@ export function BacktestView() {
           ) : null
         }
       />
-      <Kpi label="信息比率 IR" value={r ? fx(r.info_ratio, 2) : '—'} sub={<span>超额 / TE</span>} />
-      <Kpi label="最大回撤" value={r ? negPct(r.max_drawdown_pct) : '—'} sub={<span>策略净值</span>} />
-      <Kpi label="超额最大回撤" value={r ? negPct(r.excess_max_drawdown_pct) : '—'} sub={<span>相对基准</span>} />
-      <Kpi label="Calmar" value={r ? fx(r.calmar, 2) : '—'} sub={<span>年化 / |MDD|</span>} />
+      <Kpi label={<TermTip id="information_ratio" value={r ? r.info_ratio : null}>信息比率 IR</TermTip>} value={r ? fx(r.info_ratio, 2) : '—'} sub={<span>超额 / TE</span>} />
+      <Kpi label={<TermTip id="max_drawdown" display={r ? negPct(r.max_drawdown_pct) : undefined}>最大回撤</TermTip>} value={r ? negPct(r.max_drawdown_pct) : '—'} sub={<span>策略净值</span>} />
+      <Kpi label={<TermTip id="excess_drawdown" display={r ? negPct(r.excess_max_drawdown_pct) : undefined}>超额最大回撤</TermTip>} value={r ? negPct(r.excess_max_drawdown_pct) : '—'} sub={<span>相对基准</span>} />
+      <Kpi label={<TermTip id="calmar" value={r ? r.calmar : null}>Calmar</TermTip>} value={r ? fx(r.calmar, 2) : '—'} sub={<span>年化 / |MDD|</span>} />
       <Kpi label="日胜率 / 盈亏比" value={r ? `${fx(winPct, 1)}% / ${fx(r.profit_loss_ratio, 2)}` : '—'} sub={<span>日频口径</span>} />
       <Kpi label="年化双边换手" value={r ? fx(r.ann_turnover_pct, 0) + '%' : '—'} sub={<span>双边 · 年化</span>} />
       <Kpi
-        label="交易摩擦总损耗"
+        label={<TermTip id="sqrt_impact" display={f ? fx(f.total_friction_bps, 0) + ' bps/年' : undefined}>交易摩擦总损耗</TermTip>}
         value={f ? fx(f.total_friction_bps, 0) + ' bps/年' : '—'}
         sub={r ? <span>成交 {thou(r.total_fills)} · 拒单 {thou(r.total_rejections)}</span> : null}
       />
@@ -252,6 +272,7 @@ export function BacktestView() {
   const rejRate = r && r.total_fills > 0 ? (r.total_rejections / r.total_fills) * 100 : null;
 
   const a = r?.attribution;
+  const invariants = normInvariants(r?.invariants);
   const specShare = (() => {
     if (!a) return null;
     const tot = a.barra_specific_alpha_pct + a.barra_style_pct + a.barra_industry_pct + a.barra_cost_pct;
@@ -303,6 +324,15 @@ export function BacktestView() {
         </div>
       ) : null}
       <div style={dim}>{kpis}</div>
+      {r ? (
+        <div style={dim}>
+          <div className="gsec" style={{ marginTop: 0 }}>
+            <TermTip id="conservation_law">回测不变量</TermTip>
+            <span>{invariants.length ? `${invariants.filter((i) => i.passed).length}/${invariants.length} OK` : '现金守恒 · T+1 · 涨跌停 · POV · 归因闭合'}</span>
+          </div>
+          <InvariantStrip items={invariants} height={46} emptyDetail="需 V3 /backtest/run 返回 invariants[]（现金/持仓守恒、T+1、涨跌停、POV 上限、归因闭合）" />
+        </div>
+      ) : null}
       <Panel
         title="策略 / 基准 / 超额净值 · 水下回撤 (Underwater)"
         prd="Q5.3"
@@ -357,7 +387,7 @@ export function BacktestView() {
       </Panel>
       <div className="bg2">
         <Panel
-          title="A 股微结构撮合损耗拆解 · 年化超额 (%)"
+          title={<TermTip id="gross_vs_net">A 股微结构撮合损耗拆解 · 年化超额 (%)</TermTip>}
           prd="Q5.2"
           busy={stale}
           tools={f ? <Tag tone={ev ? 'warn' : 'mute'}>{ev ? `摩擦 ${fx(f.total_friction_bps, 0)} bps/年` : `向量化 · ${fx(f.total_friction_bps, 0)} bps/年`}</Tag> : null}
@@ -371,7 +401,7 @@ export function BacktestView() {
           </DataSlot>
         </Panel>
         <Panel
-          title={`撮合失败审计${rej.length ? ` · 最近 ${rej.length} 笔` : ''}`}
+          title={<TermTip id="price_limit_rules">{`撮合失败审计${rej.length ? ` · 最近 ${rej.length} 笔` : ''}`}</TermTip>}
           prd="Q5.2"
           flush
           busy={stale}
@@ -442,12 +472,12 @@ export function BacktestView() {
         </Panel>
       </div>
       <Panel
-        title="Brinson-Fachler & Barra 闭合归因 · 真假 Alpha 甄别"
+        title={<TermTip id="barra_attribution" value={specShare}>Brinson-Fachler & Barra 闭合归因 · 真假 Alpha 甄别</TermTip>}
         prd="Q5.3"
         busy={stale}
         tools={
           a ? (
-            specShare !== null && specShare >= 65 ? (
+            specShare !== null && specShare >= UI_LIMITS.specific_alpha_share_min ? (
               <Tag tone="pass">真 Alpha 主导 · {fx(specShare, 0)}%</Tag>
             ) : (
               <Tag tone="warn">风格 Beta 偏高 · Alpha {specShare !== null ? fx(specShare, 0) + '%' : '—'}</Tag>
@@ -463,6 +493,7 @@ export function BacktestView() {
           )}
         </DataSlot>
       </Panel>
+      <CapacitySection embedded={r?.capacity_frontier} experimentId={experimentId} universeId={universe} snapshotId={r?.snapshot_id ?? snapshotId} apiOnline={apiOnline} prd="Q5.4" />
     </div>
   );
 }

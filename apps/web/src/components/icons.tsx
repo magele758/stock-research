@@ -154,6 +154,66 @@ const P: Record<string, ReactNode> = {
       <path d="M4 20h4L19 9l-4-4L4 16v4Z" />
       <path d="m13 7 4 4" />
     </>
+  ),
+  info: (
+    <>
+      <circle cx="12" cy="12" r="8.5" />
+      <path d="M12 11v6M12 7.5v.5" />
+    </>
+  ),
+  search: (
+    <>
+      <circle cx="10.5" cy="10.5" r="6.5" />
+      <path d="m15.5 15.5 5 5" />
+    </>
+  ),
+  research: (
+    <>
+      <path d="M9 3h6M10 3v6L4.5 19a1.4 1.4 0 0 0 1.2 2h12.6a1.4 1.4 0 0 0 1.2-2L14 9V3" />
+      <path d="M7 15h10" />
+    </>
+  ),
+  tree: (
+    <>
+      <rect x="3" y="3" width="6" height="5" />
+      <rect x="15" y="10" width="6" height="5" />
+      <rect x="15" y="17" width="6" height="4" />
+      <path d="M6 8v11h9M6 12.5h9" />
+    </>
+  ),
+  tomb: (
+    <>
+      <path d="M6 21V9a6 6 0 0 1 12 0v12" />
+      <path d="M3 21h18M12 9v6M9.5 11.5h5" />
+    </>
+  ),
+  cluster: (
+    <>
+      <rect x="3" y="3" width="7" height="7" />
+      <rect x="14" y="3" width="7" height="7" />
+      <rect x="3" y="14" width="7" height="7" />
+      <rect x="14" y="14" width="7" height="7" />
+    </>
+  ),
+  book: (
+    <>
+      <path d="M4 4h6a2 2 0 0 1 2 2v14a2 2 0 0 0-2-2H4V4Z" />
+      <path d="M20 4h-6a2 2 0 0 0-2 2v14a2 2 0 0 1 2-2h6V4Z" />
+    </>
+  ),
+  branch: (
+    <>
+      <circle cx="6" cy="5" r="2" />
+      <circle cx="6" cy="19" r="2" />
+      <circle cx="18" cy="8" r="2" />
+      <path d="M6 7v10M18 10c0 4-6 3-11.5 7" />
+    </>
+  ),
+  ext: (
+    <>
+      <path d="M14 4h6v6M20 4l-9 9" />
+      <path d="M18 14v6H4V6h6" />
+    </>
   )
 };
 

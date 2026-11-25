@@ -98,12 +98,18 @@ function detailMessage(detail: unknown): string {
   return '';
 }
 
-export async function quantRequest<T>(path: string, opts: RequestOpts = {}): Promise<T> {
+/** Absolute URL of an `/api/v1` path (same resolution as `quantRequest`; used by EventSource / raw text fetches). */
+export function apiUrl(path: string, query?: RequestOpts['query']): string {
   const base = QUANT_API_URL || (typeof window !== 'undefined' ? window.location.origin : 'http://127.0.0.1:8100');
   const url = new URL(`${base}${API_PREFIX}${path}`);
-  for (const [k, v] of Object.entries(opts.query ?? {})) {
+  for (const [k, v] of Object.entries(query ?? {})) {
     if (v !== undefined && v !== null && v !== '') url.searchParams.set(k, String(v));
   }
+  return url.toString();
+}
+
+export async function quantRequest<T>(path: string, opts: RequestOpts = {}): Promise<T> {
+  const url = apiUrl(path, opts.query);
   const ctrl = new AbortController();
   let timedOut = false;
   const timer = setTimeout(() => {

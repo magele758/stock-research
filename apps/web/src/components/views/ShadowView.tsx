@@ -12,6 +12,12 @@ import { quantApi } from '@/lib/quant-api';
 import type { AuthorityGateManifest, FactorDecayItem, ShadowDriftResult } from '@/lib/types';
 import { useApi } from '@/lib/use-api';
 import { usePublishMetrics, useWorkbench } from '@/lib/workbench';
+import { TermTip } from '@/components/glossary/TermTip';
+import { openStudyDrawer } from '@/lib/glossary/store';
+import { UI_LIMITS } from '@/lib/thresholds';
+
+const HP_MIN = UI_LIMITS.hist_percentile_min;
+const CROWD_MAX = UI_LIMITS.crowding_max;
 
 type WindowKey = '20' | '60' | '120';
 const WINDOWS: { key: WindowKey; label: string }[] = [
@@ -178,19 +184,19 @@ export function ShadowView() {
 
       <div className="kpis k5">
         <Kpi
-          label={`${windowDays}D Implementation Shortfall`}
+          label={<TermTip id="implementation_shortfall" value={d ? d.total_is_bps : null} context={{ window_days: windowDays }}>{`${windowDays}D Implementation Shortfall`}</TermTip>}
           value={d ? `${fx(d.total_is_bps, 0)} bps` : '—'}
           sub={d ? <span>中位 IS Δ {sg(d.median_is_delta_bps, 2)} bps</span> : undefined}
         />
-        <Kpi label="成交率" value={d ? pct(d.fill_rate_pct, 1) : '—'} sub={d ? <span>影子成交 / 目标名义</span> : undefined} />
-        <Kpi label="开盘跳空损耗" value={d ? `${sg(sGap, 0)} bps` : '—'} sub={d ? <span>sum(gap_bps) · {dates.length}D</span> : undefined} />
-        <Kpi label="流动性冲击" value={d ? `${sg(sLiq, 0)} bps` : '—'} sub={d ? <span>sum(liquidity_bps)</span> : undefined} />
-        <Kpi label="涨跌停排队" value={d ? `${sg(sLim, 0)} bps` : '—'} sub={d ? <span>{nLim} 日非零 / {dates.length}D</span> : undefined} />
+        <Kpi label={<TermTip id="fill_rate" value={d ? d.fill_rate_pct : null}>成交率</TermTip>} value={d ? pct(d.fill_rate_pct, 1) : '—'} sub={d ? <span>影子成交 / 目标名义</span> : undefined} />
+        <Kpi label={<TermTip id="open_gap" display={d ? `${sg(sGap, 0)} bps` : undefined}>开盘跳空损耗</TermTip>} value={d ? `${sg(sGap, 0)} bps` : '—'} sub={d ? <span>sum(gap_bps) · {dates.length}D</span> : undefined} />
+        <Kpi label={<TermTip id="liquidity_impact" display={d ? `${sg(sLiq, 0)} bps` : undefined}>流动性冲击</TermTip>} value={d ? `${sg(sLiq, 0)} bps` : '—'} sub={d ? <span>sum(liquidity_bps)</span> : undefined} />
+        <Kpi label={<TermTip id="limit_queue" display={d ? `${sg(sLim, 0)} bps` : undefined}>涨跌停排队</TermTip>} value={d ? `${sg(sLim, 0)} bps` : '—'} sub={d ? <span>{nLim} 日非零 / {dates.length}D</span> : undefined} />
       </div>
 
       <div className="sg2">
         <Panel
-          title="理论 vs 影子超额漂移 (IS)"
+          title={<TermTip id="implementation_shortfall">理论 vs 影子超额漂移 (IS)</TermTip>}
           prd="Q6.1"
           busy={busy}
           tools={
@@ -232,7 +238,7 @@ export function ShadowView() {
         </Panel>
 
         <div className="stack" style={{ minWidth: 0 }}>
-          <Panel title="Perold IS 拆解" sub="bps" busy={busy}>
+          <Panel title={<TermTip id="perold_is">Perold IS 拆解</TermTip>} sub="bps" busy={busy}>
             <DataSlot height={130} ready={ready} loading={res.loading} error={res.error}>
               {() => (
                 <BarChart
@@ -249,7 +255,7 @@ export function ShadowView() {
               )}
             </DataSlot>
           </Panel>
-          <Panel title="Authority Gate · 研究/交易物理隔离" prd="Q6.3" busy={busy}>
+          <Panel title={<TermTip id="authority_gate">Authority Gate · 研究/交易物理隔离</TermTip>} prd="Q6.3" busy={busy}>
             <DataSlot height={220} ready={ready} loading={res.loading} error={res.error}>
               {() => <AuthorityGate m={d!.authority_manifest} />}
             </DataSlot>
@@ -257,7 +263,7 @@ export function ShadowView() {
         </div>
       </div>
 
-      <Panel title="在产因子 · 60D IC 衰减与拥挤度预警" prd="Q6.2" flush busy={busy} sub={d ? `${decay.length} factors` : undefined}>
+      <Panel title={<TermTip id="ic_decay">在产因子 · 60D IC 衰减与拥挤度预警</TermTip>} prd="Q6.2" flush busy={busy} sub={d ? `${decay.length} factors` : undefined}>
         <DataSlot height={180} ready={ready} loading={res.loading} error={res.error}>
           {() => (
             <>
@@ -266,11 +272,19 @@ export function ShadowView() {
                   <thead>
                     <tr>
                       <th>因子</th>
-                      <th className="n">60D RankIC</th>
-                      <th className="n">历史分位</th>
-                      <th className="n">拥挤度</th>
+                      <th className="n">
+                        <TermTip id="rank_ic">60D RankIC</TermTip>
+                      </th>
+                      <th className="n">
+                        <TermTip id="hist_percentile">历史分位</TermTip>
+                      </th>
+                      <th className="n">
+                        <TermTip id="crowding_index">拥挤度</TermTip>
+                      </th>
                       <th>IC 位置 · [-0.05, 0.10]</th>
-                      <th>健康状态</th>
+                      <th>
+                        <TermTip id="kill_switch">健康状态</TermTip>
+                      </th>
                       <th>说明</th>
                       <th>操作</th>
                     </tr>
@@ -288,16 +302,16 @@ export function ShadowView() {
                             {f.name && f.name !== f.factor_id ? <span className="sub"> · {f.name}</span> : null}
                           </td>
                           <td className={`n ${isNum(f.rank_ic_60d) && f.rank_ic_60d < 0 ? 'c-dn' : ''}`}>{fx(f.rank_ic_60d, 4)}</td>
-                          <td className={`n ${isNum(hp) && hp < 20 ? 'c-warn' : ''}`}>
+                          <td className={`n ${isNum(hp) && hp < HP_MIN ? 'c-warn' : ''}`}>
                             {pct(hp, 0)}
                             {isNum(hp) ? (
-                              <span className="bar-in" style={{ width: Math.max(1, Math.min(100, hp) * 0.36), background: hp < 20 ? 'var(--warn)' : 'var(--sig)' }} />
+                              <span className="bar-in" style={{ width: Math.max(1, Math.min(100, hp) * 0.36), background: hp < HP_MIN ? 'var(--warn)' : 'var(--sig)' }} />
                             ) : null}
                           </td>
-                          <td className={`n ${isNum(cr) && cr > 0.8 ? 'c-up' : ''}`}>
+                          <td className={`n ${isNum(cr) && cr > CROWD_MAX ? 'c-up' : ''}`}>
                             {fx(cr, 2)}
                             {isNum(cr) ? (
-                              <span className="bar-in" style={{ width: Math.max(1, Math.min(1, cr) * 36), background: cr > 0.8 ? 'var(--up)' : 'var(--tx3)' }} />
+                              <span className="bar-in" style={{ width: Math.max(1, Math.min(1, cr) * 36), background: cr > CROWD_MAX ? 'var(--up)' : 'var(--tx3)' }} />
                             ) : null}
                           </td>
                           <td>
@@ -310,10 +324,32 @@ export function ShadowView() {
                             {f.note || '—'}
                           </td>
                           <td>
-                            <button type="button" className={`btn sm ${f.status !== 'ACTIVE' ? 'warnb' : ''}`} onClick={() => dock.diagnoseFactor(f, ctx)}>
-                              <Icon name="route" size={11} />
-                              派发 Bot 诊断
-                            </button>
+                            <span style={{ display: 'inline-flex', gap: 4 }}>
+                              <button type="button" className={`btn sm ${f.status !== 'ACTIVE' ? 'warnb' : ''}`} onClick={() => dock.diagnoseFactor(f, ctx)}>
+                                <Icon name="route" size={11} />
+                                派发 Bot 诊断
+                              </button>
+                              {f.status === 'DEGRADING' || f.status === 'KILL-SWITCH' ? (
+                                <button
+                                  type="button"
+                                  className="btn sm"
+                                  title="以该因子为对象新建复研课题并派发集群"
+                                  onClick={() =>
+                                    openStudyDrawer({
+                                      title: `${f.factor_id} 衰减复研`,
+                                      hypothesis: `${f.factor_id} 影子实盘 60D RankIC ${fx(f.rank_ic_60d, 4)}，历史分位 ${pct(hp, 0)}，拥挤度 ${fx(cr, 2)}，状态 ${f.status}；复检衰减是否源于 Regime 切换或拥挤交易，并给出修复或替代方案。`,
+                                      kind: 'factor',
+                                      factor_id: f.factor_id,
+                                      universe_id: universe,
+                                      source: `/shadow · ${f.status}`
+                                    })
+                                  }
+                                >
+                                  <Icon name="branch" size={10} sw={2} />
+                                  派发复研
+                                </button>
+                              ) : null}
+                            </span>
                           </td>
                         </tr>
                       );

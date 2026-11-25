@@ -18,13 +18,17 @@ from quant_core.schemas import (
     BarraExposureRequest,
     BarraExposureResult,
     BarraStyleExposure,
+    CapacityAnalysisRequest,
     IndustryDeviation,
+    InvariantCheckItem,
     OptConstraints,
     OptObjective,
     PortfolioOptRequest,
     PortfolioOptResult,
     TargetWeightItem,
 )
+
+from .capacity import _analyze_capacity
 
 BARRA_STYLES = (
     "Size",
@@ -54,31 +58,48 @@ def _ratio(numerator: pl.Expr, denominator: pl.Expr) -> pl.Expr:
     return pl.when(denominator > 0).then(numerator / denominator)
 
 
-def _zscore(values: np.ndarray) -> np.ndarray:
-    valid = np.isfinite(values)
-    if not valid.any():
-        return np.full(len(values), np.nan)
-    observed = values[valid]
-    center = np.median(observed)
-    scale = 1.4826 * np.median(np.abs(observed - center))
-    if scale == 0:
-        scale = observed.std()
-    clipped = np.clip(observed, center - 3 * scale, center + 3 * scale)
-    result = np.zeros(len(values))
-    deviation = clipped.std()
-    if deviation > np.finfo(float).eps:
-        result[valid] = (clipped - clipped.mean()) / deviation
-    return result
-
-
-def _composite(block: pl.DataFrame, descriptors: tuple[str, ...]) -> np.ndarray:
-    if len(descriptors) == 1:
-        return _zscore(block.get_column(descriptors[0]).to_numpy())
-    standardized = np.column_stack([_zscore(block.get_column(name).to_numpy()) for name in descriptors])
-    n_observed = np.isfinite(standardized).sum(axis=1)
-    composite = np.full(block.height, np.nan)
-    np.divide(np.nansum(standardized, axis=1), n_observed, out=composite, where=n_observed > 0)
-    return _zscore(composite)
+def _standardized_styles(panel: pl.DataFrame, fields: tuple[str, ...]) -> pl.DataFrame:
+    """Winsorize and standardize descriptors independently on each session."""
+    raw = panel.select("trade_date", *(_number(panel, name).alias(name) for name in fields))
+    centers = raw.with_columns(
+        pl.col(name).median().over("trade_date").alias(f"_center_{name}") for name in fields
+    )
+    scales = []
+    for name in fields:
+        column = pl.col(name)
+        mad = (column - pl.col(f"_center_{name}")).abs().median().over("trade_date") * 1.4826
+        scales.append(
+            pl.when(mad == 0)
+            .then(column.std(ddof=0).over("trade_date"))
+            .otherwise(mad)
+            .alias(f"_scale_{name}")
+        )
+    moments = centers.with_columns(scales)
+    clipped = moments.select(
+        "trade_date",
+        *(
+            pl.col(name)
+            .clip(
+                pl.col(f"_center_{name}") - 3 * pl.col(f"_scale_{name}"),
+                pl.col(f"_center_{name}") + 3 * pl.col(f"_scale_{name}"),
+            )
+            .alias(name)
+            for name in fields
+        ),
+    )
+    normalized = []
+    for name in fields:
+        column = pl.col(name)
+        std = column.std(ddof=0).over("trade_date")
+        normalized.append(
+            pl.when(std.is_null())
+            .then(None)
+            .when(std > np.finfo(float).eps)
+            .then(((column - column.mean().over("trade_date")) / std).fill_null(0.0))
+            .otherwise(0.0)
+            .alias(name)
+        )
+    return clipped.select("trade_date", *normalized)
 
 
 def _utc_timestamp(panel: pl.DataFrame, name: str) -> pl.Expr:
@@ -289,38 +310,46 @@ def build_barra_exposure_panel(
     else:
         panel = panel.with_columns(pl.col("industry_l1").cast(pl.String).fill_null("Unknown"))
 
-    style_blocks = []
-    for block in panel.partition_by("trade_date", maintain_order=True):
-        size = _zscore(block.get_column("_barra_size").to_numpy())
-        nonlinear = np.full(block.height, np.nan)
+    single = {
+        "Size": "_barra_size",
+        "Beta": "_barra_beta",
+        "Momentum": "_barra_momentum",
+        "BTOP": "_barra_btop",
+        "Earnings Yield": "_barra_ey",
+    }
+    composite = {
+        "Residual Vol": ("_barra_residual_vol", "_barra_total_vol"),
+        "Liquidity": ("_barra_liq5", "_barra_liq21", "_barra_liq63"),
+        "Growth": ("_barra_revgrowth", "_barra_earngrowth"),
+        "Leverage": ("_barra_debteq", "_barra_debtassets"),
+    }
+    descriptors = (*single.values(), *(name for fields in composite.values() for name in fields))
+    standardized = _standardized_styles(panel, descriptors)
+    combined = _standardized_styles(
+        standardized.select(
+            "trade_date", *(pl.mean_horizontal(fields).alias(name) for name, fields in composite.items())
+        ),
+        tuple(composite),
+    )
+    sizes = standardized["_barra_size"].to_numpy()
+    dates = standardized["trade_date"].to_numpy()
+    boundaries = np.flatnonzero(dates[1:] != dates[:-1]) + 1
+    nonlinear = np.full(panel.height, np.nan)
+    for rows in np.split(np.arange(panel.height), boundaries):
+        size = sizes[rows]
         if np.isfinite(size).any():
-            regressors = np.column_stack([np.ones(block.height), size])
+            regressors = np.column_stack([np.ones(len(rows)), size])
             cubic = size**3
             coefficients = np.linalg.lstsq(regressors, cubic, rcond=None)[0]
             residual = cubic - regressors @ coefficients
             # A common scale preserves the orthogonality of the cubic residual.
             deviation = residual.std()
-            nonlinear = residual / deviation if deviation > 1e-12 else np.zeros(block.height)
-        style_blocks.append(
-            np.column_stack(
-                [
-                    size,
-                    _composite(block, ("_barra_beta",)),
-                    _composite(block, ("_barra_momentum",)),
-                    _composite(block, ("_barra_residual_vol", "_barra_total_vol")),
-                    nonlinear,
-                    _composite(block, ("_barra_btop",)),
-                    _composite(block, ("_barra_liq5", "_barra_liq21", "_barra_liq63")),
-                    _composite(block, ("_barra_ey",)),
-                    _composite(block, ("_barra_revgrowth", "_barra_earngrowth")),
-                    _composite(block, ("_barra_debteq", "_barra_debtassets")),
-                ]
-            )
-        )
-    values = np.concatenate(style_blocks)
-    return panel.with_columns(
-        pl.Series(style, values[:, index], nan_to_null=True) for index, style in enumerate(BARRA_STYLES)
+            nonlinear[rows] = residual / deviation if deviation > 1e-12 else 0.0
+    exposures = combined.with_columns(
+        *(standardized[field].alias(name) for name, field in single.items()),
+        pl.Series("Nonlinear Size", nonlinear, nan_to_null=True),
     )
+    return panel.with_columns(exposures.select(*BARRA_STYLES).get_columns())
 
 
 def fit_barra_factor_returns(
@@ -1085,6 +1114,103 @@ def solve(alpha, w0, benchmark, X, D, factor_root, specific_vol, lower, upper):
 '''
 
 
+def _portfolio_invariants(
+    inputs: _Portfolio,
+    target: np.ndarray | None,
+    cash: float,
+    traded: np.ndarray | None,
+    reported_te: float,
+    effective_violation: float,
+) -> list[dict[str, Any]]:
+    model = inputs.model
+    covariance = model.factor_covariance
+    symmetry = float(np.max(np.abs(covariance - covariance.T)))
+    factor_min = float(np.linalg.eigvalsh((covariance + covariance.T) / 2).min())
+    specific_min = float(model.specific_variance.min())
+    design = model.design
+    # For F PSD, X F X' is PSD. A negative factor eigenvalue supplies a
+    # conservative asset-covariance bound via the squared design operator norm.
+    asset_psd_floor = specific_min
+    if factor_min < 0:
+        asset_psd_floor += factor_min * float(np.linalg.norm(design, ord=2) ** 2)
+    psd_tolerance = 1e-10
+    min_eigen_bound = min(factor_min, specific_min, asset_psd_floor)
+    covariance_check = InvariantCheckItem(
+        key="cov_psd",
+        label="Covariance PSD",
+        value=f"{asset_psd_floor:.12g}",
+        tolerance=f">= {-psd_tolerance:g}",
+        passed=bool(min_eigen_bound >= -psd_tolerance and symmetry <= psd_tolerance),
+        detail=(
+            f"Asset covariance eigenvalue lower bound from X F X' + diag(s). "
+            f"Factor minimum {factor_min:.12g}, specific minimum {specific_min:.12g}, "
+            f"factor symmetry residual {symmetry:.12g}."
+        ),
+    )
+    checks = [
+        ("weight_simplex", "Weight simplex", 1e-6),
+        ("industry_net_zero", "Industry active weights plus cash close to zero", 1e-6),
+        ("constraint_violation", "Requested constraint violation", _FEASIBILITY_TOLERANCE),
+        ("te_recompute", "Tracking error recomputation", 1e-10),
+    ]
+    if target is None:
+        output = [
+            InvariantCheckItem(
+                key=key,
+                label=label,
+                value="unavailable",
+                tolerance=f"<= {tol:g}",
+                passed=False,
+                detail="The solver did not produce a releasable target.",
+            )
+            for key, label, tol in checks
+        ]
+    else:
+        active = target - inputs.benchmark
+        industry_active = model.industry_exposures.T @ active
+        membership_error = np.max(np.abs(model.industry_exposures.sum(axis=1) - 1))
+        requested_violation = max(
+            inputs.violations(
+                target,
+                inputs.constraints.max_turnover_oneway,
+                _style_limits(inputs.constraints),
+                cash,
+                traded,
+            ).values()
+        )
+        factor_active = design.T @ active
+        recomputed_te = np.sqrt(
+            max(float(factor_active @ covariance @ factor_active + model.specific_variance @ active**2), 0.0)
+        )
+        evidence = [
+            (
+                max(abs(target.sum() + cash - 1), max(-float(target.min()), -cash, 0)),
+                f"Stock and cash weight total {target.sum() + cash:.12g}, cash weight {cash:.12g}.",
+            ),
+            (
+                max(abs(industry_active.sum() + cash), membership_error),
+                "Each listing belongs to one industry. Cash is included in active weight totals.",
+            ),
+            (requested_violation, f"Effective constraint residual {effective_violation:.12g}."),
+            (
+                abs(recomputed_te - reported_te),
+                f"Recomputed TE {recomputed_te:.12g}, reported {reported_te:.12g}.",
+            ),
+        ]
+        output = [
+            InvariantCheckItem(
+                key=key,
+                label=label,
+                value=f"{value:.12g}",
+                tolerance=f"<= {tol:g}",
+                passed=bool(value <= tol),
+                detail=detail,
+            )
+            for (key, label, tol), (value, detail) in zip(checks, evidence, strict=True)
+        ]
+    return [item.model_dump() for item in [*output, covariance_check]]
+
+
 def optimize_portfolio(
     bars_df: pl.DataFrame,
     alpha_scores: dict[str, float],
@@ -1216,6 +1342,30 @@ def optimize_portfolio(
                 )
             )
 
+    elapsed_ms = (time.perf_counter() - start) * 1000
+    max_violation = float(max(inputs.violations(evaluated, turnover, limits, cash, traded).values()))
+    invariants = _portfolio_invariants(inputs, target, cash, traded, variance, max_violation)
+    capacity = None
+    if target is not None:
+        latest_ids = (
+            model.latest["listing_id"].to_list() if "listing_id" in model.latest.columns else model.symbols
+        )
+        frontier = _analyze_capacity(
+            bars_df,
+            CapacityAnalysisRequest(
+                experiment_id=req.experiment_id,
+                universe_id=req.universe_id,
+                snapshot_id=req.snapshot_id,
+            ),
+            signed_weights={
+                listing or symbol: float(change)
+                for listing, symbol, change in zip(latest_ids, model.symbols, delta, strict=True)
+            },
+            gross_excess_ann_pct=excess * 100,
+            active_vol_ann=variance,
+            current_aum_cny=nav if nav is not None else 1e8,
+        )
+        capacity = frontier.model_dump(mode="json", exclude={"illiquid_names", "artifact_uri"})
     return PortfolioOptResult(
         opt_run_id=run_id,
         experiment_id=req.experiment_id,
@@ -1223,7 +1373,7 @@ def optimize_portfolio(
         snapshot_id=req.snapshot_id or "unspecified",
         solver=solution.solver,
         solve_status=solve_status,
-        solve_ms=(time.perf_counter() - start) * 1000,
+        solve_ms=elapsed_ms,
         relaxation_notes=notes,
         expected_gross_excess_pct=excess * 100,
         expected_cost_pct=cost * 100,
@@ -1233,11 +1383,11 @@ def optimize_portfolio(
         oneway_turnover_pct=one_way * 100,
         annualized_turnover=one_way * 52,
         effective_n_stocks=len(holdings),
-        max_constraint_violation=float(
-            max(inputs.violations(evaluated, turnover, limits, cash, traded).values())
-        ),
+        max_constraint_violation=max_violation,
         style_exposures=styles,
         industry_deviations=industries,
         top_holdings=holdings,
         cvxpy_snippet=_cvxpy_snippet(c, turnover, limits),
+        invariants=invariants,
+        capacity_frontier=capacity,
     )

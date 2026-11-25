@@ -42,8 +42,8 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(
-    title="Pro-Quant V2.0 API",
-    version="0.2.0",
+    title="Pro-Quant V3.0 API",
+    version="0.3.0",
     description="Deterministic quant research API. Read-only: no broker or order routes.",
     lifespan=lifespan,
 )

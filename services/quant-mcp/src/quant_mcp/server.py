@@ -25,8 +25,9 @@ from quant_api.catalog import MCP_TOOL_NAMES
 from . import tools as T
 
 INSTRUCTIONS = (
-    "Pro-Quant V2.0 deterministic quant research tools (PIT data lake, factor lab, CPCV/DSR gate, Barra CNE6, "
-    "cvxpy optimizer, A-share microstructure backtest, shadow drift). Every response is a McpEnvelope JSON <= 8 KiB; "
+    "Pro-Quant V3.0 deterministic quant research tools (PIT data lake, factor lab, CPCV/DSR gate, Barra CNE6, "
+    "cvxpy optimizer, A-share microstructure backtest, shadow drift, glossary, formal verification, regime and "
+    "capacity analysis, cluster research ledger; 21 tools). Every response is a McpEnvelope JSON <= 8 KiB; "
     "large tables are returned as quant-artifact:// references. Long jobs: pass async_mode=true and poll by calling "
     "the same tool with job_id. READ-ONLY: no broker connection or order placement exists. Never present outputs as "
     "investment advice."
@@ -60,6 +61,23 @@ _REGISTRY: list[tuple[str, Callable[..., str], str]] = [
      "Brinson-Fachler and Barra attribution plus friction breakdown for a completed backtest (run_id or job_id)."),
     ("quant_shadow_drift_check", T.tool_shadow_drift_check,
      "Shadow portfolio drift: implementation shortfall, fill rate, factor decay/kill-switch, read-only authority manifest."),
+    # --- V3.0 ---
+    ("quant_glossary_lookup", T.tool_glossary_lookup,
+     "Institutional quant glossary lookup by term_id or keyword (formula, threshold, pitfalls, related terms, Bot interpretation prompt rendered with context_values). Works without a data snapshot."),
+    ("quant_formal_verify", T.tool_formal_verify,
+     "Formal verification proof ledger (T1 causality/prefix-invariance, T2 scale/coverage, T3 PIT/conservation, T4 bootstrap CI/CPCV/BH-FDR/SPA/param cliff) with proof_sha256. async_mode=true returns job_id in <1s; poll with job_id."),
+    ("quant_regime_analysis", T.tool_regime_analysis,
+     "Cross-dimension regime analysis (market/volatility/cap/industry/style): Regime Consistency Score, single-dimension dominance warning, per-bucket excess vs baseline."),
+    ("quant_capacity_analysis", T.tool_capacity_analysis,
+     "AUM capacity frontier (sqrt-impact, PoV): net excess/IR per AUM, half-alpha and breakeven AUM, liquidity bottlenecks. Uncalibrated scenario analysis."),
+    ("quant_dispatch_research", T.tool_dispatch_research,
+     "Dispatch a research study to engine_sandbox or a cluster dev worker (tombstone dedupe, parent lineage, math_derivation). async_mode=true (default) returns study_id + job_id fast; poll with quant_get_research_study. Requires approval."),
+    ("quant_get_research_study", T.tool_get_research_study,
+     "Research study status/verdict, 8-suite proof headline, diagnosis, improvement count and last N events (include_events_tail); full detail in artifact."),
+    ("quant_list_research_studies", T.tool_list_research_studies,
+     "List research ledger: view=studies|lineage|tombstones|baselines|clusters with query/verdict/parent_study_id filters (limit<=100)."),
+    ("quant_publish_research_finding", T.tool_publish_research_finding,
+     "Write back an external worker finding. Worker-claimed metrics are never trusted: the server re-runs formal verification before any VERIFIED verdict. Requires approval."),
 ]
 
 
@@ -74,7 +92,7 @@ def _threaded(fn: Callable[..., str]) -> Callable[..., Any]:
 
 
 def build_server() -> MCPServer:
-    server = MCPServer("pro-quant", instructions=INSTRUCTIONS, version="0.2.0")
+    server = MCPServer("pro-quant", instructions=INSTRUCTIONS, version="0.3.0")
     for name, fn, desc in _REGISTRY:
         server.add_tool(_threaded(fn), name=name, description=desc, structured_output=False)
     registered = [n for n, _, _ in _REGISTRY]

@@ -2,6 +2,7 @@
 
 import { useState } from 'react';
 import { Icon } from '@/components/icons';
+import { TermTip } from '@/components/glossary/TermTip';
 import { ApiNotice, DataSlot, Kpi, Panel, Seg, SolveMeta, Tag, ViewHeader, triTone, type Tone } from '@/components/ui';
 import { fmtAge, fmtMb, fmtMs, fmtTs, isNum, pct, shortHash, sum, thou } from '@/lib/format';
 import { quantApi, QuantApiError } from '@/lib/quant-api';
@@ -20,7 +21,7 @@ const MODES: { key: SyncMode; label: string }[] = [
   { key: 'incremental', label: '增量同步' },
   { key: 'check', label: '校验' }
 ];
-const MCP_CONTRACT_TOOLS = 13;
+const MCP_CONTRACT_TOOLS = 21;
 
 interface SyncOutcome {
   provider: SyncProvider;
@@ -105,12 +106,26 @@ function SyncResult({ outcome, onClose }: { outcome: SyncOutcome; onClose: () =>
   );
 }
 
+/** QA sentinel → glossary term (check ids from quant_core.lake.qa_sentinel). */
+const QA_TERM: [RegExp, string][] = [
+  [/QA-01|OHLCV|GEOM/i, 'ohlcv_geometry'],
+  [/QA-02|CORP|ADJ/i, 'corp_action_adj'],
+  [/QA-03|PIT|FIN/i, 'look_ahead_bias'],
+  [/QA-04|DELIST|SURVIVOR/i, 'survivorship_bias'],
+  [/QA-05|UNIVERSE|CONSTITUENT/i, 'historical_constituents'],
+  [/QA-06|INDUSTRY/i, 'sw_industry_pit'],
+  [/QA-07|LIMIT/i, 'price_limit_rules']
+];
+const qaTerm = (id: string) => QA_TERM.find(([re]) => re.test(id))?.[1] ?? 'point_in_time';
+
 function GuardCard({ c }: { c: QualityCheckItem }) {
   const samples = c.sample_symbols ?? [];
   return (
     <div className={`gc ${c.status === 'pass' ? '' : c.status}`}>
       <div className="gh">
-        <span title={`${c.check_id} · ${c.name}`}>{c.name}</span>
+        <TermTip id={qaTerm(c.check_id)} display={`${c.status.toUpperCase()} · affected ${thou(c.affected_count)}`} context={{ check_id: c.check_id, affected: c.affected_count }} className="gh-t">
+          {c.name}
+        </TermTip>
         {triTag(c.status)}
       </div>
       <div className="gv" title="affected_count">
@@ -270,10 +285,20 @@ export function DataView() {
         <Kpi
           label="整体状态 overall_status"
           value={h ? triTag(h.overall_status) : '—'}
-          sub={h ? <span title={h.fact_fingerprint}>fp {shortHash(h.fact_fingerprint, 6)}</span> : undefined}
+          sub={
+            h ? (
+              <TermTip id="fact_fingerprint" as="span" display={shortHash(h.fact_fingerprint, 6)}>
+                fp {shortHash(h.fact_fingerprint, 6)}
+              </TermTip>
+            ) : undefined
+          }
         />
-        <Kpi label="覆盖率" value={h ? pct(h.coverage_pct, 2) : '—'} sub={h ? <span>as_of {fmtTs(h.as_of)}</span> : undefined} />
-        <Kpi label="数据新鲜度" value={h ? fmtAge(h.freshness_sec) : '—'} sub={h ? <span>freshness_sec {thou(h.freshness_sec)}</span> : undefined} />
+        <Kpi
+          label={<TermTip id="coverage" value={h && isNum(h.coverage_pct) ? (h.coverage_pct > 1 ? h.coverage_pct / 100 : h.coverage_pct) : null} display={h ? pct(h.coverage_pct, 2) : undefined}>覆盖率</TermTip>}
+          value={h ? pct(h.coverage_pct, 2) : '—'}
+          sub={h ? <span>as_of {fmtTs(h.as_of)}</span> : undefined}
+        />
+        <Kpi label={<TermTip id="freshness" display={h ? fmtAge(h.freshness_sec) : undefined}>数据新鲜度</TermTip>} value={h ? fmtAge(h.freshness_sec) : '—'} sub={h ? <span>freshness_sec {thou(h.freshness_sec)}</span> : undefined} />
         <Kpi
           label="质量哨兵"
           value={h ? `${passed} / ${checks.length}` : '—'}
@@ -373,7 +398,7 @@ export function DataView() {
       </Panel>
 
       <div className="g2" style={{ gridTemplateColumns: 'minmax(0, 1fr) minmax(0, 1.3fr)' }}>
-        <Panel title="7 项 PIT 质量哨兵 · Bias & Integrity Guard" prd="Q1.3" busy={health.loading && !!h}>
+        <Panel title={<TermTip id="point_in_time">7 项 PIT 质量哨兵 · Bias & Integrity Guard</TermTip>} prd="Q1.3" busy={health.loading && !!h}>
           <DataSlot height={260} ready={!!h} loading={health.loading} error={health.error}>
             {() => (
               <>
@@ -394,7 +419,7 @@ export function DataView() {
         </Panel>
 
         <Panel
-          title={`Quant MCP · ${tools.length || 'N'} Tools 状态表`}
+          title={<TermTip id="mcp_side_effect">{`Quant MCP · ${tools.length || 'N'} Tools 状态表`}</TermTip>}
           prd="Q7.1"
           flush
           busy={mcp.loading && !!mcp.data}
@@ -405,7 +430,7 @@ export function DataView() {
                   {serverName}
                   {mcp.data.version ? ` v${mcp.data.version}` : ''} · {transport ?? '—'} · {thou(calls24)} 次
                 </span>
-                <Tag tone={tools.length === MCP_CONTRACT_TOOLS ? 'pass' : 'warn'} title="契约约定 13 个 quant_* 工具">
+                <Tag tone={tools.length === MCP_CONTRACT_TOOLS ? 'pass' : 'warn'} title="契约约定 21 个 quant_* 工具">
                   {tools.length}/{MCP_CONTRACT_TOOLS} tools
                 </Tag>
               </>
@@ -474,7 +499,7 @@ export function DataView() {
       </div>
 
       <Panel
-        title="快照清单 · Snapshot Manifest"
+        title={<TermTip id="pit_snapshot_lock">快照清单 · Snapshot Manifest</TermTip>}
         prd="Q1.2"
         flush
         busy={snaps.loading && !!snaps.data}

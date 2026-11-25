@@ -1,0 +1,1788 @@
+[
+  {
+    "term_id": "point_in_time",
+    "term": "时点数据 (PIT)",
+    "en_name": "Point-in-Time Bi-Temporal Data",
+    "domain": "Q1",
+    "category": "data",
+    "aliases": ["pit", "point_in_time_bitemporal", "bi_temporal", "asof", "ann_date"],
+    "short_tip": "严格仅使用决策时刻已公开的历史数据，财报按公告日与首见时间双时态入表，杜绝未来修订回填。",
+    "formula_latex": "\\mathcal{F}_t = \\{ x_i : \\text{published\\_at}_i \\le t \\;\\wedge\\; \\text{report\\_period\\_end}_i \\le \\text{ann\\_date}_i \\le t \\}",
+    "formula_lines": [
+      "strict_public: published_at <= as_of",
+      "recorded_replay: published_at <= as_of AND first_seen_at <= as_of",
+      "withdrawn latest revision -> exclude (never revert to stale revision)"
+    ],
+    "institutional_threshold": "PIT 时序倒挂违规 = 0 条（ann_date >= report_period_end 且 published_at <= as_of）",
+    "common_pitfalls": [
+      "按报告期 report_period_end 而非公告日 ann_date 对齐财报，会引入长达 1–4 个月的前视泄漏",
+      "财报撤回（is_withdrawn=True）后静默回退到旧版本会导致虚假历史基本面信号"
+    ],
+    "related_terms": ["look_ahead_bias", "survivorship_bias", "fact_fingerprint", "prefix_invariance"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（{universe_id}，对象 {entity_id}）解读「{term}」：当前观测状态 {value}（机构门槛：{institutional_threshold}）。请排查是否存在公告日倒挂、重述回填或撤回处理漏洞。"
+  },
+  {
+    "term_id": "survivorship_bias",
+    "term": "幸存者偏差",
+    "en_name": "Survivorship Bias",
+    "domain": "Q1",
+    "category": "data",
+    "aliases": ["qa_04", "delisted_retention", "survivorship"],
+    "short_tip": "若历史样本只保留当前仍在交易的股票而丢弃已退市股票，回测收益与胜率会被系统性高估。",
+    "formula_latex": "\\mathbb{E}[R \\mid \\text{Survived}_T] - \\mathbb{E}[R] > 0",
+    "formula_lines": [
+      "active_universe(t) = { i : list_date_i <= t AND (delist_date_i IS NULL OR t <= delist_date_i) }",
+      "QA-04: delisted_count > 0 AND zero bars after delist_date"
+    ],
+    "institutional_threshold": "历史退市股保留率 = 100%，退市后零幽灵行情（QA-04 PASS）",
+    "common_pitfalls": [
+      "使用当前 A 股全市场列表反查历史行情，自动剔除了全部退市爆雷股票",
+      "小盘/微盘反转与低价股因子对幸存者偏差极为敏感，剔除退市股可凭空多出 3%–8% 年化伪超额"
+    ],
+    "related_terms": ["point_in_time", "historical_constituents", "look_ahead_bias", "price_limit_rules"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（{universe_id}）分析「{term}」：当前值 {value}（门槛：{institutional_threshold}）。评估退市股纳入完整性及对当前策略超额的潜在影响。"
+  },
+  {
+    "term_id": "look_ahead_bias",
+    "term": "前视偏差",
+    "en_name": "Look-Ahead Bias",
+    "domain": "Q1",
+    "category": "data",
+    "aliases": ["lookahead", "future_leak", "future_function"],
+    "short_tip": "在 t 时刻的因子计算、预处理或选股中无意引用了 t 之后才能获知的价格、标签或全局统计量。",
+    "formula_latex": "\\exists\\, \\tau < T : f(\\mathcal{D}_{\\le \\tau})_{i,\\tau} \\neq f(\\mathcal{D}_{\\le T})_{i,\\tau}",
+    "formula_lines": [
+      "禁止算子: shift(-k), lead(k), rolling(..., center=True)",
+      "隐蔽泄漏: 全样本均值/标准差、未来指数成分、后复权终点缩放"
+    ],
+    "institutional_threshold": "前视违规节点 = 0，前缀截断最大漂移 <= 1e-10（零容忍硬红线）",
+    "common_pitfalls": [
+      "使用 pandas/polars 全样本 z-score 或 PCA，虽无显式 shift(-1) 却已泄漏未来分布均值与方差",
+      "在标签计算与特征构造之间混用收盘价与当日停牌/涨跌停结果"
+    ],
+    "related_terms": ["prefix_invariance", "ast_causal_proof", "ast_safe", "point_in_time"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（对象 {entity_id}）排查「{term}」风险：当前状态 {value}（门槛：{institutional_threshold}）。给出 AST 因果检查与前缀不变性复测结论。"
+  },
+  {
+    "term_id": "corp_action_adj",
+    "term": "复权与公司行动连续性",
+    "en_name": "Corporate Action Adjustment Continuity",
+    "domain": "Q1",
+    "category": "data",
+    "aliases": ["adj_factor", "adj_factor_continuity", "qa_02", "ex_dividend", "split_adj"],
+    "short_tip": "分红、送股、拆股在除权除息日造成名义价格跳空，必须通过连续复权因子还原真实总回报。",
+    "formula_latex": "P^{\\text{ex,ref}}_t = \\frac{P_{t-1} - D_t}{s_t + b_t}, \\quad r^{\\text{adj}}_t = \\frac{P_t \\cdot a_t}{P_{t-1} \\cdot a_{t-1}} - 1",
+    "formula_lines": [
+      "P_ex_ref = (pre_close - cash_div) / (split_ratio + bonus_ratio)",
+      "|r_adj - (close / P_ex_ref - 1)| < 1e-4 (QA-02)"
+    ],
+    "institutional_threshold": "除权日复权收益率跳变异常 = 0 条（QA-02 PASS）",
+    "common_pitfalls": [
+      "动量或波动率因子直接用未复权 close 计算，会把 10 送 10 除权误判为 -50% 暴跌",
+      "事件回测中错误使用前复权价格撮合成交，导致整手股数、印花税与分红现金流严重失真"
+    ],
+    "related_terms": ["ohlcv_geometry", "point_in_time", "t_plus_1", "conservation_law"],
+    "bot_prompt_template": "请结合快照 {snapshot_id} 解读「{term}」（当前值 {value}，门槛：{institutional_threshold}），说明除权除息复权口径对因子计算与回测现金流的不同要求。"
+  },
+  {
+    "term_id": "ohlcv_geometry",
+    "term": "OHLCV 几何一致性",
+    "en_name": "OHLCV Bar Geometry Consistency",
+    "domain": "Q1",
+    "category": "data",
+    "aliases": ["qa_01", "bar_geometry", "ohlc_check"],
+    "short_tip": "校验日线 K 线基本物理约束：最低价不高于开收盘、最高价不低于开收盘、价格与成交量非负。",
+    "formula_latex": "0 < L_t \\le \\min(O_t, C_t) \\le \\max(O_t, C_t) \\le H_t, \\quad V_t \\ge 0",
+    "formula_lines": [
+      "low <= min(open, close) <= max(open, close) <= high",
+      "volume_shares >= 0 AND amount_ccy >= 0 AND (is_suspended -> volume == 0)"
+    ],
+    "institutional_threshold": "几何违背与非正价格记录 = 0 条（QA-01 PASS）",
+    "common_pitfalls": [
+      "供应商原始数据把成交量按“手”(100 股) 或成交额按“千元”上报而未统一换算成股和元",
+      "停牌日出现非零成交量或涨跌停价格倒挂，会导致回测撮合逻辑失真"
+    ],
+    "related_terms": ["corp_action_adj", "price_limit_rules", "coverage", "freshness"],
+    "bot_prompt_template": "请结合快照 {snapshot_id} 解读「{term}」审计状态 {value}（门槛：{institutional_threshold}），排查异常 K 线对信号和回测撮合的影响。"
+  },
+  {
+    "term_id": "historical_constituents",
+    "term": "历史指数成分与权重",
+    "en_name": "Historical Index Constituents & Weights",
+    "domain": "Q1",
+    "category": "data",
+    "aliases": ["dynamic_universe_constituents", "qa_05", "universe_pit", "benchmark_weights"],
+    "short_tip": "按历史每个交易日当时的真实指数成分股和权重构建股票池与基准，绝不拿今天的成分表回溯过去。",
+    "formula_latex": "\\sum_{i \\in \\mathcal{U}_t} w^{\\text{bench}}_{i,t} = 1, \\quad \\text{effective\\_from}_i \\le t \\le \\text{effective\\_to}_i",
+    "formula_lines": [
+      "U(t) = { i : as_of_date <= t AND effective_from <= t <= effective_to }",
+      "|sum(w_bench(t)) - 1.0| < 0.001 (QA-05)"
+    ],
+    "institutional_threshold": "历史成分权重和偏差 < 0.1%，且零未来调入股提前进入（QA-05 PASS）",
+    "common_pitfalls": [
+      "拿今天的中证 500 成分股去回测三年前，会提前买入后来成长壮大被纳入指数的赢家股",
+      "成分权重缺失时直接丢弃标的或未重新归一化，造成基准收益漂移"
+    ],
+    "related_terms": ["survivorship_bias", "point_in_time", "sw_industry_pit", "tracking_error"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（{universe_id}）解读「{term}」：当前值 {value}（门槛：{institutional_threshold}），核查指数调样节点与基准权重质量。"
+  },
+  {
+    "term_id": "sw_industry_pit",
+    "term": "申万行业 PIT 归属",
+    "en_name": "Shenwan Industry PIT Classification",
+    "domain": "Q1",
+    "category": "data",
+    "aliases": ["qa_06", "sw2021", "industry_l1", "shenwan_pit"],
+    "short_tip": "按历史当日有效的申万一级行业（SW2021）区间归属做行业中性化与归因，避免公司转型后用新行业回填历史。",
+    "formula_latex": "\\forall\\, (i, t),\\; \\left|\\{ k : \\text{valid\\_from}_k \\le t \\le \\text{valid\\_to}_k \\}\\right| = 1",
+    "formula_lines": [
+      "valid_from <= trade_date <= valid_to (taxonomy = SW2021)",
+      "QA-06: overlapping industry intervals = 0"
+    ],
+    "institutional_threshold": "行业归属时间区间重叠 = 0、缺失率 <= 1%（QA-06 PASS）",
+    "common_pitfalls": [
+      "公司主业切换（如机械设备转为电子）后按最新行业做历史中性化，造成历史残差污染",
+      "行业区间端点重叠导致 SQL join 行数倍增，重复计算同一只股票"
+    ],
+    "related_terms": ["industry_neutral", "industry_active_dev", "brinson_allocation", "point_in_time"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（{universe_id}）解读「{term}」：当前状态 {value}（门槛：{institutional_threshold}），评估行业变更对因子中性化与 Brinson 归因的影响。"
+  },
+  {
+    "term_id": "price_limit_rules",
+    "term": "A 股涨跌停规则",
+    "en_name": "A-Share Price Limit Rules",
+    "domain": "Q1",
+    "category": "data",
+    "aliases": ["qa_07", "price_limit_queue", "limit_up_down", "st_limit"],
+    "short_tip": "按板块与日期精确映射 A 股涨跌停幅度（主板 ±10%、双创 ±20%、北交所 ±30%、主板 ST 2026-07-06 起由 ±5% 调整为 ±10%）。",
+    "formula_latex": "P^{\\text{up}}_t = \\text{round}_{0.01}\\!\\left(P^{\\text{pre}}_t (1 + \\delta_{\\text{board,ST},t})\\right)",
+    "formula_lines": [
+      "MAIN: ±10% | CHINEXT/STAR: ±20% | BSE: ±30%",
+      "MAIN ST: ±5% (< 2026-07-06) -> ±10% (>= 2026-07-06)"
+    ],
+    "institutional_threshold": "涨跌停价格与板块/日期规则错配 = 0 条（QA-07 PASS）",
+    "common_pitfalls": [
+      "回测忽略一字涨停无法买入、一字跌停无法卖出，严重夸大动量与事件驱动策略收益",
+      "未按 0.01 元四舍五入（half-up）和历史规则切换日计算涨跌停板价，误判可成交状态"
+    ],
+    "related_terms": ["t_plus_1", "limit_queue", "fill_rate", "ohlcv_geometry"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（{universe_id}）解读「{term}」：当前值 {value}（门槛：{institutional_threshold}），说明涨跌停板约束如何影响当前策略成交与拒单。"
+  },
+  {
+    "term_id": "coverage",
+    "term": "数据与因子覆盖率",
+    "en_name": "Cross-Sectional Coverage",
+    "domain": "Q1",
+    "category": "data",
+    "aliases": ["min_coverage", "factor_coverage", "data_coverage"],
+    "short_tip": "截面中拥有有效非空观测值（非 NaN、非停牌剔除异常）的标的占目标股票池总数的比例。",
+    "formula_latex": "\\text{Coverage}_t = \\frac{\\left|\\{ i \\in \\mathcal{U}_t : f_{i,t} \\in \\mathbb{R} \\}\\right|}{|\\mathcal{U}_t|}",
+    "formula_lines": [
+      "Coverage_t = N_valid(t) / N_universe(t)",
+      "Hard Gate (INSTITUTIONAL_GATES.min_coverage): >= 80% (0.80)"
+    ],
+    "institutional_threshold": "正式入库覆盖率 >= 80%（0.80）；70%–80% 为 WARN 观察区间；< 70% 拒绝",
+    "common_pitfalls": [
+      "长窗口因子预热期未剔除或冷门字段缺失率过高，导致实际上只在少数股票上算 IC",
+      "用均值填充大面积缺失值会人为制造大量相同分位数的“假覆盖”"
+    ],
+    "related_terms": ["freshness", "rank_ic", "mad_winsorize", "ohlcv_geometry"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（{universe_id}，对象 {entity_id}）解读「{term}」：当前值 {value}（门槛：{institutional_threshold}）。排查低覆盖原因（预热期/财报缺失/停牌）及改进方案。"
+  },
+  {
+    "term_id": "freshness",
+    "term": "数据新鲜度",
+    "en_name": "Data Freshness",
+    "domain": "Q1",
+    "category": "data",
+    "aliases": ["staleness", "data_freshness", "freshness_sec"],
+    "short_tip": "最新冻结数据集快照的截止时间戳 as_of 与当前时间或最近交易日之间的滞后时长。",
+    "formula_latex": "\\Delta t_{\\text{fresh}} = t_{\\text{now}} - \\text{as\\_of}(\\text{snapshot})",
+    "formula_lines": [
+      "freshness_sec = max(0, now_utc - snapshot.as_of)",
+      "stale -> 触发 DATA_STALE 告警并阻止生产调仓导出"
+    ],
+    "institutional_threshold": "生产研究滞后 <= 1 个交易日；超期触发 DATA_STALE 阻断信号导出",
+    "common_pitfalls": [
+      "日线行情已更新但财务或行业表停留在旧快照，形成跨表时间错位",
+      "在数据过期状态下静默回退到旧快照或合成数据掩盖采集失败"
+    ],
+    "related_terms": ["coverage", "fact_fingerprint", "authority_gate", "point_in_time"],
+    "bot_prompt_template": "请结合快照 {snapshot_id} 解读「{term}」：当前值 {value}（门槛：{institutional_threshold}），判断当前快照是否满足研究与影子盘复核的新鲜度要求。"
+  },
+  {
+    "term_id": "fact_fingerprint",
+    "term": "事实指纹与不可变快照",
+    "en_name": "Fact Fingerprint & Immutable Snapshot",
+    "domain": "Q1",
+    "category": "data",
+    "aliases": ["manifest_sha256", "immutable_dataset_snapshot", "fact_fingerprint_silence", "snapshot_hash"],
+    "short_tip": "对输入快照清单、参数与计算事实做 SHA-256 摘要，保证任意历史研究可字节级复现并防止静默漂移。",
+    "formula_latex": "\\text{fp} = \\text{SHA256}\\!\\left(\\text{snapshot\\_id} \\parallel \\text{manifest\\_sha256} \\parallel \\text{canonical\\_payload}\\right)",
+    "formula_lines": [
+      "manifest_sha256 = SHA256(canonical_json(table_paths, row_counts, file_sha256))",
+      "recompute_fp == recorded_fp -> deterministic reproducibility verified"
+    ],
+    "institutional_threshold": "重算事实指纹 100% 字节一致；无变化时遵守 [NO_UPDATE] 静默协议",
+    "common_pitfalls": [
+      "复用同一 snapshot_id 覆盖写入 Parquet 文件，破坏历史实验的可追溯性",
+      "不同机器浮点排序或未固定随机种子导致同快照两次运行指纹不一致"
+    ],
+    "related_terms": ["point_in_time", "freshness", "conservation_law", "authority_gate"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（对象 {entity_id}）解读「{term}」：当前指纹 {value}（要求：{institutional_threshold}），核验复现链路的完整性。"
+  },
+  {
+    "term_id": "rank_ic",
+    "term": "秩信息系数 (RankIC)",
+    "en_name": "Spearman Rank Information Coefficient",
+    "domain": "Q2",
+    "category": "factor",
+    "aliases": ["ic", "rank_ic_mean", "spearman_ic", "spearman_vs_pearson"],
+    "short_tip": "每日截面因子值排名与下期股票收益率排名的斯皮尔曼相关系数均值，稳健度量单调选股预测能力。",
+    "formula_latex": "\\text{RankIC}_t = \\operatorname{Corr}\\!\\left(\\operatorname{rank}(f_{\\cdot, t}),\\; \\operatorname{rank}(r_{\\cdot, t+1 \\to t+h})\\right), \\quad \\overline{\\text{RankIC}} = \\frac{1}{T}\\sum_{t=1}^{T} \\text{RankIC}_t",
+    "formula_lines": [
+      "RankIC_t = Spearman(f_t, r_{t+1->t+h})",
+      "Hard Gate (INSTITUTIONAL_GATES.rank_ic_min): |RankIC| >= 0.03 (WARN: 0.02 - 0.03)"
+    ],
+    "institutional_threshold": "正式入库 |RankIC| >= 0.03（INSTITUTIONAL_GATES.rank_ic_min）；0.02–0.03 为初筛 WARN 区间",
+    "common_pitfalls": [
+      "只看全样本 RankIC 均值而不看 Bootstrap 95% 置信区间和分 Regime 切片，易被单一极端行情误导",
+      "截面样本不足 50 只股票或未剔除一字涨跌停股票时，RankIC 噪声极大且不可交易"
+    ],
+    "related_terms": ["icir", "nw_t_stat", "ic_win_rate", "bootstrap_ci", "monotonicity"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（{universe_id}，对象 {entity_id}）深度解读「{term}」：当前值 {value}（门槛：{institutional_threshold}）。结合 ICIR、NW t 与分 Regime 表现判断 Alpha 是否真实可交易。"
+  },
+  {
+    "term_id": "icir",
+    "term": "年化信息比率 (ICIR)",
+    "en_name": "Annualized IC Information Ratio",
+    "domain": "Q2",
+    "category": "factor",
+    "aliases": ["icir_ann", "ic_ir", "annualized_icir"],
+    "short_tip": "RankIC 均值除以日度标准差并年化（×√252），衡量因子预测能力随时间推移的稳定性与信噪比。",
+    "formula_latex": "\\text{ICIR}_{\\text{ann}} = \\frac{\\overline{\\text{RankIC}}}{\\sigma(\\text{RankIC})} \\times \\sqrt{252}",
+    "formula_lines": [
+      "ICIR_ann = (mean(RankIC_t) / std(RankIC_t)) * sqrt(252)",
+      "Hard Gate (INSTITUTIONAL_GATES.icir_ann_min): >= 1.50 (WARN: 1.00 - 1.50)"
+    ],
+    "institutional_threshold": "正式入库 ICIR >= 1.50（INSTITUTIONAL_GATES.icir_ann_min）；1.00–1.50 为 WARN 观察区间",
+    "common_pitfalls": [
+      "多日重叠收益标签（如 5D/20D）存在强自相关，直接乘 √252 会严重高估真实年化 ICIR",
+      "未做行业和市值中性化时，风格 Beta 趋势期会短暂拉高 ICIR，风格反转即崩盘"
+    ],
+    "related_terms": ["rank_ic", "nw_t_stat", "newey_west_hac", "ic_win_rate", "information_ratio"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（{universe_id}，对象 {entity_id}）解读「{term}」：当前值 {value}（门槛：{institutional_threshold}）。评估因子稳定性及重叠标签自相关带来的虚高风险。"
+  },
+  {
+    "term_id": "nw_t_stat",
+    "term": "Newey-West 稳健 t 统计量",
+    "en_name": "Newey-West HAC t-Statistic",
+    "domain": "Q2",
+    "category": "factor",
+    "aliases": ["nw_t", "newey_west_t", "hac_t_stat"],
+    "short_tip": "在校正日频 IC 序列的自相关和异方差（HAC）后，检验 RankIC 均值显著异于零的统计显著性指标。",
+    "formula_latex": "t_{\\text{NW}} = \\frac{\\overline{\\text{IC}}}{\\sqrt{\\widehat{\\Omega}_{\\text{NW}}(L) / T}}, \\quad \\widehat{\\Omega}_{\\text{NW}}(L) = \\hat{\\gamma}_0 + 2\\sum_{\\ell=1}^{L}\\left(1 - \\frac{\\ell}{L+1}\\right)\\hat{\\gamma}_{\\ell}",
+    "formula_lines": [
+      "t_NW = mean(IC) / SE_NW(IC, lag=L)",
+      "Hard Gate (INSTITUTIONAL_GATES.nw_t_stat_min): >= 3.00 (WARN: 2.00 - 3.00)"
+    ],
+    "institutional_threshold": "正式入库 |NW t| >= 3.00（Harvey-Liu-Zhu 机构门槛）；2.00–3.00 为 WARN 观察区间",
+    "common_pitfalls": [
+      "使用普通 i.i.d. t 检验替代 Newey-West，在正自相关 IC 序列上会大幅低估标准误",
+      "经历上百次因子搜索后仍使用 1.96 门槛，属于典型的多重检验假发现（应同时看 BH-FDR 与 DSR）"
+    ],
+    "related_terms": ["newey_west_hac", "rank_ic", "icir", "bh_fdr", "dsr"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（{universe_id}，对象 {entity_id}）解读「{term}」：当前值 {value}（门槛：{institutional_threshold}）。说明 HAC 校正意义以及与 BH-FDR/DSR 的联合判定。"
+  },
+  {
+    "term_id": "ic_win_rate",
+    "term": "IC 胜率",
+    "en_name": "IC Hit Rate (Positive Ratio)",
+    "domain": "Q2",
+    "category": "factor",
+    "aliases": ["ic_hit_rate", "win_rate_ic"],
+    "short_tip": "历史评估期内截面 RankIC 与预期方向同号的交易日占比，用于排查收益是否仅靠少数极端日撑起。",
+    "formula_latex": "\\text{WinRate}_{\\text{IC}} = \\frac{1}{T}\\sum_{t=1}^{T} \\mathbf{1}\\!\\left(\\text{RankIC}_t > 0\\right)",
+    "formula_lines": [
+      "IC_WinRate = count(RankIC_t > 0) / T",
+      "机构经验参考: >= 55%（与 RankIC/ICIR 联合评估）"
+    ],
+    "institutional_threshold": "机构参考 >= 55%（若均值高但胜率 < 50% 需排查极端单日离群值驱动）",
+    "common_pitfalls": [
+      "只看高胜率而忽略负偏度尾部风险：可能 60% 天小赚但 5% 极端反转日亏光全年利润",
+      "把原始方向未对齐的负向因子直接算 >0 占比，导致胜率看似低于 45%"
+    ],
+    "related_terms": ["rank_ic", "icir", "long_short", "dimension_dependence"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（{universe_id}，对象 {entity_id}）解读「{term}」：当前值 {value}（参考：{institutional_threshold}），判断因子收益是否由少数极端日驱动。"
+  },
+  {
+    "term_id": "ic_decay",
+    "term": "IC 滞后衰减曲线",
+    "en_name": "IC Decay Across Forward Horizons",
+    "domain": "Q2",
+    "category": "factor",
+    "aliases": ["alpha_decay", "lag_ic", "horizon_ic"],
+    "short_tip": "信号延迟 1D/3D/5D/10D/20D/60D 后的前向 RankIC 衰减轨迹，反映信号衰减速度与最佳调仓周期。",
+    "formula_latex": "\\text{IC}(h) = \\frac{1}{T}\\sum_{t=1}^{T} \\operatorname{Corr}_{\\text{rank}}(f_t,\\; r_{t+1 \\to t+h})",
+    "formula_lines": [
+      "horizons = [1D, 3D, 5D, 10D, 20D, 60D]",
+      "衰减过快（Lag5 保留 < 50%）-> 难以承受 A 股 T+1 与高换手摩擦"
+    ],
+    "institutional_threshold": "Lag5 保留比例建议 >= 50%，衰减速度须匹配策略调仓频率",
+    "common_pitfalls": [
+      "1D RankIC 极高但 3D 迅速衰减归零，在 A 股 T+1 约束和隔夜跳空下实盘几乎无法捕获",
+      "误把累计收益 IC(1→20D) 当作边际滞后 IC(t+19→t+20)，高估信号持续性"
+    ],
+    "related_terms": ["half_life", "turnover_oneway", "t_plus_1", "open_gap"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（{universe_id}，对象 {entity_id}）分析「{term}」：当前表现 {value}（参考：{institutional_threshold}），建议匹配的调仓频率与换手控制方案。"
+  },
+  {
+    "term_id": "half_life",
+    "term": "IC 半衰期",
+    "en_name": "Signal IC Half-Life",
+    "domain": "Q2",
+    "category": "factor",
+    "aliases": ["ic_decay_half_life", "half_life_days", "signal_half_life"],
+    "short_tip": "因子预测力（RankIC 或自相关）衰减至初始水平一半所需的交易天数，直接决定最优持仓与调仓节奏。",
+    "formula_latex": "\\text{IC}(t_{1/2}) = \\frac{1}{2}\\text{IC}(1), \\quad t_{1/2} \\approx \\frac{\\ln 2}{\\lambda_{\\text{decay}}}",
+    "formula_lines": [
+      "t_half = argmin_h { IC(h) <= 0.5 * IC(1) }",
+      "半衰期应 >= 策略调仓周期，否则换手成本将吞噬 Alpha"
+    ],
+    "institutional_threshold": "建议半衰期 >= 策略调仓周期（周频策略建议 >= 5 交易日）",
+    "common_pitfalls": [
+      "用 2 天半衰期的短周期反转因子去跑月频调仓，绝大部分信号在调仓前已失效",
+      "强行对短半衰期因子做高平滑拉长半衰期，可能会同时抹平信号幅度和延迟入场"
+    ],
+    "related_terms": ["ic_decay", "turnover_oneway", "turnover_lambda", "t_plus_1"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（{universe_id}，对象 {entity_id}）解读「{term}」：当前值 {value} 天（参考：{institutional_threshold}），评估其与换手率及调仓频率的匹配度。"
+  },
+  {
+    "term_id": "monotonicity",
+    "term": "十分层单调性",
+    "en_name": "Decile Monotonicity (Spearman rho)",
+    "domain": "Q2",
+    "category": "factor",
+    "aliases": ["decile_monotonicity", "monotonicity_spearman", "quantile_monotonicity"],
+    "short_tip": "按因子值将股票分为 Q1 至 Q10 十组，检验各组年化收益随分组序号严格递增的斯皮尔曼相关度。",
+    "formula_latex": "\\rho_{\\text{mono}} = \\operatorname{Corr}_{\\text{rank}}\\left((1,2,\\dots,10),\\; (R_{Q1}, R_{Q2}, \\dots, R_{Q10})\\right)",
+    "formula_lines": [
+      "rho_mono = Spearman([1..10], [ann_ret(Q1)..ann_ret(Q10)])",
+      "Hard Gate (INSTITUTIONAL_GATES.monotonicity_min): >= 0.90 (WARN: 0.70 - 0.90)"
+    ],
+    "institutional_threshold": "正式入库单调性 rho >= 0.90（INSTITUTIONAL_GATES.monotonicity_min）；0.70–0.90 为 WARN",
+    "common_pitfalls": [
+      "中间组平坦、仅靠 Q1 极端垃圾股暴跌制造多空收益，A 股无法融券做空 Q1 时多头无超额",
+      "呈现倒 U 型非单调结构却直接做线性加权，导致最优收益集中在中分位而非头部"
+    ],
+    "related_terms": ["rank_ic", "long_short", "top_excess", "mad_winsorize"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（{universe_id}，对象 {entity_id}）解读「{term}」：当前值 {value}（门槛：{institutional_threshold}）。检查 Q1–Q10 分层收益结构是真单调还是尾部噪声驱动。"
+  },
+  {
+    "term_id": "long_short",
+    "term": "多空年化收益 (Q10−Q1)",
+    "en_name": "Long-Short Decile Annualized Return",
+    "domain": "Q2",
+    "category": "factor",
+    "aliases": ["long_short_ann", "ls_return", "q10_minus_q1"],
+    "short_tip": "纸面等权做多因子最高分位组（Q10）同时做空最低分位组（Q1）的年化收益，反映因子理论区分度。",
+    "formula_latex": "R^{\\text{LS}}_t = R_{Q10, t} - R_{Q1, t}, \\quad R^{\\text{LS}}_{\\text{ann}} = \\prod_{t=1}^{T}(1 + R^{\\text{LS}}_t)^{252/T} - 1",
+    "formula_lines": [
+      "LS_t = ret(Q10_t) - ret(Q1_t)",
+      "机构要求: LS > 0 且 Bootstrap 95% CI 下界 > 0"
+    ],
+    "institutional_threshold": "纸面多空年化 > 0 且 95% Bootstrap 置信区间不跨零；A 股须同时核查 Top 组多头超额",
+    "common_pitfalls": [
+      "A 股融券受限，若多空收益 80% 来自做空 Q1 而非做多 Q10，在实盘纯多头增强中难以兑现",
+      "十分层纸面净值未扣佣金、印花税、涨跌停与冲击成本，不能替代事件驱动净收益"
+    ],
+    "related_terms": ["top_excess", "monotonicity", "gross_vs_net", "bootstrap_ci"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（{universe_id}，对象 {entity_id}）解读「{term}」：当前值 {value}（要求：{institutional_threshold}）。对比 Top 组多头超额并评估在 A 股多头约束下的可兑现比例。"
+  },
+  {
+    "term_id": "top_excess",
+    "term": "Top 组多头超额",
+    "en_name": "Top-Decile Long-Only Excess Return",
+    "domain": "Q2",
+    "category": "factor",
+    "aliases": ["top_excess_ann", "long_only_alpha", "q10_excess"],
+    "short_tip": "因子最高分位组（Q10）相对基准组合的年化超额收益，是在 A 股难以做空约束下真正可落袋的多头 Alpha。",
+    "formula_latex": "R^{\\text{TopEx}}_t = R_{Q10, t} - R_{\\text{bench}, t}",
+    "formula_lines": [
+      "Top_Excess_t = ret(Q10_t) - ret(Benchmark_t)",
+      "A 股指数增强核心关注项: Top_Excess > 0 且扣除冲击与费用后仍显著为正"
+    ],
+    "institutional_threshold": "年化多头超额 > 0，且经 Barra 约束优化与事件驱动回测后净超额仍保持正值",
+    "common_pitfalls": [
+      "等权 Q10 相对市值加权基准天然携带小市值暴露，容易把小盘 Beta 误认为多头 Alpha",
+      "忽视行业集中度导致 Q10 在单一行业占比过高，带来不可控的跟踪误差"
+    ],
+    "related_terms": ["long_short", "barra_attribution", "size_neutral", "industry_neutral"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（{universe_id}，对象 {entity_id}）解读「{term}」：当前值 {value}（要求：{institutional_threshold}）。剥离市值与行业风格后评估真实多头选股能力。"
+  },
+  {
+    "term_id": "turnover_oneway",
+    "term": "单边日换手率",
+    "en_name": "One-Way Daily Turnover",
+    "domain": "Q2",
+    "category": "factor",
+    "aliases": ["daily_turnover_oneway", "factor_turnover_oneway", "turnover", "oneway_turnover"],
+    "short_tip": "每日组合权重单边调整比例（0.5×Σ|w_t − w_{t-1}|），直接决定印花税、佣金与市场冲击摩擦成本。",
+    "formula_latex": "\\text{TO}_t = \\frac{1}{2}\\sum_{i=1}^{N} \\left| w_{i,t} - w_{i,t-1^{+}} \\right|",
+    "formula_lines": [
+      "TO_oneway(t) = 0.5 * sum(|w_t - w_{t-1,drifted}|)",
+      "Hard Gate (INSTITUTIONAL_GATES.daily_turnover_max): <= 15% (0.15) (WARN: 15% - 20%)"
+    ],
+    "institutional_threshold": "正式入库单边日换手 <= 15%（0.15，INSTITUTIONAL_GATES.daily_turnover_max）；15%–20% 为 WARN",
+    "common_pitfalls": [
+      "混淆单边换手与双边换手（双边 = 2×单边），导致交易成本估算偏差一倍",
+      "高换手短周期量价因子在 1000 万资金下勉强盈利，但资金放大到 5 亿时会被平方根冲击完全吞噬"
+    ],
+    "related_terms": ["half_life", "turnover_lambda", "stamp_duty", "sqrt_impact", "capacity_frontier"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（{universe_id}，对象 {entity_id}）解读「{term}」：当前值 {value}（门槛：{institutional_threshold}）。量化其对年化摩擦成本与资金容量的拖累，并给出降频建议。"
+  },
+  {
+    "term_id": "max_corr_library",
+    "term": "库内最大相关性",
+    "en_name": "Maximum Correlation in Factor Library",
+    "domain": "Q2",
+    "category": "factor",
+    "aliases": ["max_corr_in_library", "factor_crowding_collinearity", "collinearity", "max_corr"],
+    "short_tip": "候选因子与现有在库因子截面平均绝对相关系数的最大值，用于防止换汤不换药的冗余共线因子入库。",
+    "formula_latex": "\\rho_{\\max} = \\max_{g \\in \\mathcal{L}} \\frac{1}{T}\\sum_{t=1}^{T} \\left|\\operatorname{Corr}_{\\text{rank}}(f_t, g_t)\\right|",
+    "formula_lines": [
+      "max_corr = max_{g in Library} mean_t(|Spearman(f_t, g_t)|)",
+      "Hard Gate (INSTITUTIONAL_GATES.max_corr_library): < 0.70 (WARN: 0.50 - 0.70)"
+    ],
+    "institutional_threshold": "正式入库 < 0.70（INSTITUTIONAL_GATES.max_corr_library）；0.50–0.70 为 WARN 需检验增量正交 IC",
+    "common_pitfalls": [
+      "仅把窗口从 20D 改成 21D 或换了个非线性变换就当成新因子入库，拉高多重检验风险却无增量信息",
+      "只和 4 个内置因子比而不和历史已登记或已证伪墓碑因子比，漏判高共线性"
+    ],
+    "related_terms": ["barra_orthogonal", "crowding_index", "bh_fdr", "trial_count_m"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（{universe_id}，对象 {entity_id}）解读「{term}」：当前值 {value}（门槛：{institutional_threshold}）。评估新因子对现有因子库的边际正交贡献。"
+  },
+  {
+    "term_id": "mad_winsorize",
+    "term": "MAD 中位数去极值",
+    "en_name": "Median Absolute Deviation Winsorization",
+    "domain": "Q2",
+    "category": "factor",
+    "aliases": ["mad_winsorization", "winsorize", "mad_k"],
+    "short_tip": "利用截面中位数与绝对偏差中位数截断极端离群因子值，比均值-标准差法更能抵抗厚尾极值污染。",
+    "formula_latex": "\\text{MAD}_t = \\operatorname{median}\\!\\left(|x_t - m_t|\\right), \\quad \\tilde{x}_{i,t} = \\operatorname{clip}\\!\\left(x_{i,t},\\; m_t - k \\cdot 1.4826\\,\\text{MAD}_t,\\; m_t + k \\cdot 1.4826\\,\\text{MAD}_t\\right)",
+    "formula_lines": [
+      "MAD = median(|x - median(x)|), sigma_MAD = 1.4826 * MAD",
+      "clip(x, median - k*sigma_MAD, median + k*sigma_MAD), 默认 k = 3.5"
+    ],
+    "institutional_threshold": "截面逐日严格因果执行，默认 k = 3.5（绝不可跨日全局求中位数）",
+    "common_pitfalls": [
+      "在全时间序列而非单日截面上计算中位数与 MAD，引入隐蔽的前视偏差",
+      "对本身已高度离散或存在大量零值的因子过度截断，导致 MAD = 0 退化"
+    ],
+    "related_terms": ["zscore_rank", "industry_neutral", "size_neutral", "prefix_invariance"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（对象 {entity_id}）解读「{term}」：当前参数 {value}（规范：{institutional_threshold}），说明截断极值对后续中性化回归与单调性的影响。"
+  },
+  {
+    "term_id": "industry_neutral",
+    "term": "行业中性化",
+    "en_name": "Cross-Sectional Industry Neutralization",
+    "domain": "Q2",
+    "category": "factor",
+    "aliases": ["cross_sectional_neutralization", "ind_neutral", "sw_neutral"],
+    "short_tip": "在每日截面上对申万一级行业哑变量回归取残差，剥离行业轮动 Beta，只保留行业内选股 Alpha。",
+    "formula_latex": "f_{i,t} = \\sum_{k=1}^{K} \\beta_{k,t}\\,\\mathbf{1}_{i \\in \\text{Ind}_k} + \\varepsilon_{i,t}, \\quad f^{\\text{neut}}_{i,t} = \\varepsilon_{i,t}",
+    "formula_lines": [
+      "f_resid = f - X_industry * beta_OLS (每日截面独立回归)",
+      "残余行业暴露建议 <= 0.30σ（硬线 <= 0.50σ）"
+    ],
+    "institutional_threshold": "预处理后残余行业暴露 |z| <= 0.30σ（组合硬约束参考 industry_active_dev）",
+    "common_pitfalls": [
+      "成分股极少的冷门行业（如仅 1–2 只）在行业内去均值后会直接归零，丢失有效信号",
+      "使用静态最新行业分类而非 PIT 申万行业表，会引入行业切换前视偏差"
+    ],
+    "related_terms": ["sw_industry_pit", "size_neutral", "barra_orthogonal", "residual_exposure"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（{universe_id}，对象 {entity_id}）解读「{term}」：当前残余暴露 {value}（门槛：{institutional_threshold}），检验行业 Beta 是否已充分剥离。"
+  },
+  {
+    "term_id": "size_neutral",
+    "term": "市值中性化",
+    "en_name": "Size (Log Market Cap) Neutralization",
+    "domain": "Q2",
+    "category": "factor",
+    "aliases": ["cap_neutral", "ln_cap_neutral"],
+    "short_tip": "每日截面对对数流通市值做线性回归取残差，剔除小盘/微盘溢价伪装成的伪 Alpha。",
+    "formula_latex": "f_{i,t} = \\alpha_t + \\beta_{\\text{size},t} \\ln(\\text{FloatCap}_{i,t}) + \\varepsilon_{i,t}",
+    "formula_lines": [
+      "f_resid = f - (alpha + beta * ln(float_market_cap))",
+      "残余 Size 暴露 |z| <= 0.30σ（硬线 <= 0.50σ）"
+    ],
+    "institutional_threshold": "预处理后残余市值暴露 |z| <= 0.30σ；组合层面硬红线 |z| <= 0.50σ",
+    "common_pitfalls": [
+      "仅做线性 ln(Cap) 中性化但忽略非线性市值（MidCap / MicroCap 凸性），微盘股仍可能主导超额",
+      "在市值中性化后再做 Rank 标准化，可能重新引入轻微残余市值相关，需后验复核"
+    ],
+    "related_terms": ["industry_neutral", "barra_orthogonal", "residual_exposure", "dimension_dependence"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（{universe_id}，对象 {entity_id}）解读「{term}」：当前残余 Size 暴露 {value}（门槛：{institutional_threshold}），排查是否存在小微盘 Beta 伪装。"
+  },
+  {
+    "term_id": "barra_orthogonal",
+    "term": "Barra 风格正交化",
+    "en_name": "Barra Style Orthogonalization",
+    "domain": "Q2",
+    "category": "factor",
+    "aliases": ["style_orthogonal", "svd_orthogonal", "barra_neutral"],
+    "short_tip": "利用 SVD/WLS 将候选因子投影到 Barra 风格因子子空间的正交补空间，仅保留无法被已知风格解释的纯增量 Alpha。",
+    "formula_latex": "f^{\\perp}_t = \\left(I - B_t (B_t^{\\top} B_t)^{+} B_t^{\\top}\\right) f_t",
+    "formula_lines": [
+      "f_orth = f - B * pinv(B) * f (B 为当日截面 Barra 风格暴露矩阵)",
+      "残余风格暴露 |z| <= 0.30σ（组合硬线 <= 0.50σ）"
+    ],
+    "institutional_threshold": "正交后各项 Barra 残余风格暴露 |z| <= 0.30σ（硬线 <= 0.50σ）",
+    "common_pitfalls": [
+      "在风格矩阵共线或病态时用普通求逆而非 SVD 伪逆，引发数值爆炸",
+      "正交化前因子 IC 高、正交化后归零，说明原信号实质上是波动率/流动性/动量等已知风格 Beta"
+    ],
+    "related_terms": ["barra_cne6", "residual_exposure", "style_exposure", "barra_attribution"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（{universe_id}，对象 {entity_id}）解读「{term}」：当前正交结果 {value}（门槛：{institutional_threshold}），判断信号是否属于真增量特质 Alpha。"
+  },
+  {
+    "term_id": "zscore_rank",
+    "term": "截面标准化 (Z-Score vs Rank)",
+    "en_name": "Cross-Sectional Standardization (Z-Score vs Rank)",
+    "domain": "Q2",
+    "category": "factor",
+    "aliases": ["standardize", "zscore", "rank_norm"],
+    "short_tip": "将每日截面因子映射到统一量纲：Z-Score 保留相对距离信息，Rank（均匀/高斯分位）则对重尾异常值具备天然免疫力。",
+    "formula_latex": "z_{i,t} = \\frac{x_{i,t} - \\mu_t}{\\sigma_t}, \\quad u_{i,t} = \\Phi^{-1}\\!\\left(\\frac{\\operatorname{rank}(x_{i,t})}{N_t + 1}\\right)",
+    "formula_lines": [
+      "Z-Score: (x - cs_mean(x)) / cs_std(x)",
+      "Rank: 截面排序归一化至 [-1, 1] 或标准正态分位（更抗厚尾）"
+    ],
+    "institutional_threshold": "必须按 trade_date 独立截面计算（严禁跨日全局标准化）；后验复核残余风格暴露",
+    "common_pitfalls": [
+      "对偏态极强的成交额或估值因子直接做 Z-Score 而未做 MAD 去极值，头部两三只股票会主宰全部权重",
+      "在中性化之后再做非线性 Rank 变换，可能轻微破坏已正交的行业/市值零暴露"
+    ],
+    "related_terms": ["mad_winsorize", "residual_exposure", "prefix_invariance", "rank_ic"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（对象 {entity_id}）比较「{term}」：当前模式 {value}，评估 Z-Score 与 Rank 在该因子分布形态下的优劣与残余暴露差异。"
+  },
+  {
+    "term_id": "residual_exposure",
+    "term": "残余风格暴露",
+    "en_name": "Post-Preprocess Residual Style Exposure",
+    "domain": "Q2",
+    "category": "factor",
+    "aliases": ["residual_style", "exp_limit"],
+    "short_tip": "因子经过去极值、中性化与标准化之后，与 Barra 风格因子（Size/Beta/Mom/Vol/Value/Liq）之间残留的截面相关性。",
+    "formula_latex": "\\rho^{\\text{resid}}_{k} = \\frac{1}{T}\\sum_{t=1}^{T} \\operatorname{Corr}\\!\\left(f^{\\text{final}}_t,\\; B_{k,t}\\right)",
+    "formula_lines": [
+      "residual_exposure_k = mean_t(Corr(f_final_t, style_k_t))",
+      "预警线: |z| <= 0.30σ | 组合硬红线 (INSTITUTIONAL_GATES.barra_style_hard_limit): <= 0.50σ"
+    ],
+    "institutional_threshold": "因子预处理预警线 |z| <= 0.30σ；组合硬红线 |z| <= 0.50σ",
+    "common_pitfalls": [
+      "以为勾选了中性化开关就高枕无忧，忽略缺失值掩码或 Rank 变换引入的二次暴露回流",
+      "残余暴露均值接近 0 但绝对均值很大（正负抵消），实际在每个时间段都在剧烈押注风格"
+    ],
+    "related_terms": ["barra_orthogonal", "style_exposure", "size_neutral", "industry_neutral"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（{universe_id}，对象 {entity_id}）解读「{term}」：当前暴露 {value}（门槛：{institutional_threshold}），诊断哪些风格仍有残留偏离并提出修正。"
+  },
+  {
+    "term_id": "ast_safe",
+    "term": "AST 静态安全检查",
+    "en_name": "AST Static Safety & Allowlist Check",
+    "domain": "Q2",
+    "category": "factor",
+    "aliases": ["ast_guard", "ast_causal_guard", "expression_safety"],
+    "short_tip": "不执行源码而直接解析表达式抽象语法树，强制校验字段白名单、算子白名单、复杂度上限并拦截未来算子与系统调用。",
+    "formula_latex": "\\text{AST}(e) \\subseteq \\mathcal{O}_{\\text{causal}} \\times \\mathcal{F}_{\\text{PIT}}, \\quad |\\text{Nodes}(e)| \\le 160",
+    "formula_lines": [
+      "白名单算子: rolling_*(center=False), shift(n>=0), cs_rank/zscore over trade_date",
+      "强阻断: shift(-k), lead, center=True, os/sys/eval/exec/__import__, 节点数 > 160"
+    ],
+    "institutional_threshold": "ast_safe == True（违规节点 = 0，表达式长度 <= 4096，AST 节点 <= 160）",
+    "common_pitfalls": [
+      "把原始字符串丢给 Python eval() 执行，存在任意代码执行（RCE）安全漏洞",
+      "通过变量别名或负常数表达式（如 shift(1-2)）试图绕过简单正则扫描，必须走 AST 常量折叠校验"
+    ],
+    "related_terms": ["ast_causal_proof", "look_ahead_bias", "prefix_invariance"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（对象 {entity_id}）解读「{term}」检查结果 {value}（门槛：{institutional_threshold}），说明被拦截或通过的 AST 因果约束细节。"
+  },
+  {
+    "term_id": "sharpe_is_oos",
+    "term": "样本内/样本外夏普比率",
+    "en_name": "In-Sample vs Out-of-Sample Sharpe Ratio",
+    "domain": "Q3",
+    "category": "validation",
+    "aliases": ["is_sharpe", "oos_sharpe", "sharpe_sampling_variance"],
+    "short_tip": "对比策略在训练调参期（IS）与未见测试期（OOS）的风险调整收益，夏普暴跌是过拟合最直接的信号。",
+    "formula_latex": "\\widehat{\\text{SR}}_{\\text{ann}} = \\frac{\\bar{r}}{\\hat{\\sigma}_r}\\sqrt{252}, \\quad \\operatorname{Var}(\\widehat{\\text{SR}}) = \\frac{1 - \\hat{\\gamma}_3 \\widehat{\\text{SR}} + \\frac{\\hat{\\gamma}_4 - 1}{4}\\widehat{\\text{SR}}^2}{T - 1}",
+    "formula_lines": [
+      "IS_SR = Sharpe on training folds | OOS_SR = median Sharpe across CPCV OOS paths",
+      "需结合 OOS/IS 比值、DSR 与收益偏度/峰度共同判读"
+    ],
+    "institutional_threshold": "要求 IS Sharpe > 0 且 OOS/IS >= 0.50（INSTITUTIONAL_GATES.oos_is_ratio_min）",
+    "common_pitfalls": [
+      "只展示高光 IS Sharpe 而隐藏 OOS 衰减，或反复看测试集结果调参把 OOS 污染成二次 IS",
+      "在负偏度、高峰度（厚尾崩盘）策略上高估夏普显著性"
+    ],
+    "related_terms": ["oos_is_ratio", "dsr", "pbo", "cpcv"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（对象 {entity_id}）解读「{term}」：当前数值 {value}（参考：{institutional_threshold}），评估样本外泛化稳定性与过拟合风险。"
+  },
+  {
+    "term_id": "oos_is_ratio",
+    "term": "OOS/IS 夏普保留比",
+    "en_name": "Out-of-Sample to In-Sample Sharpe Ratio",
+    "domain": "Q3",
+    "category": "validation",
+    "aliases": ["oos_is", "sharpe_decay_ratio"],
+    "short_tip": "样本外中位夏普除以样本内夏普，直接量化策略从历史拟合迁移到未知市场时保留了多少有效收益。",
+    "formula_latex": "\\text{Ratio}_{\\text{OOS/IS}} = \\frac{\\text{median}(\\text{SR}_{\\text{OOS}})}{\\text{SR}_{\\text{IS}}}, \\quad \\text{SR}_{\\text{IS}} > 0",
+    "formula_lines": [
+      "OOS/IS = median(OOS_path_sharpes) / IS_sharpe",
+      "Hard Gate (INSTITUTIONAL_GATES.oos_is_ratio_min): >= 0.50 (WARN: 0.40 - 0.50)"
+    ],
+    "institutional_threshold": "正式入库 >= 0.50（INSTITUTIONAL_GATES.oos_is_ratio_min，且 IS > 0）；0.40–0.50 为 WARN",
+    "common_pitfalls": [
+      "当 IS Sharpe 极低甚至为负时，OOS/IS 比值失去意义甚至负负得正产生误判",
+      "单次时间切分（如仅留最后半年）偶然赶上有利 Regime 会虚高 OOS/IS，必须用 CPCV 多路径中位数"
+    ],
+    "related_terms": ["sharpe_is_oos", "cpcv", "pbo", "dsr", "walk_forward"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（对象 {entity_id}）解读「{term}」：当前值 {value}（门槛：{institutional_threshold}），诊断样本外衰减的根因（过拟合/参数悬崖/Regime 切换）。"
+  },
+  {
+    "term_id": "cpcv",
+    "term": "组合清除交叉验证 (CPCV)",
+    "en_name": "Combinatorial Purged Cross-Validation",
+    "domain": "Q3",
+    "category": "validation",
+    "aliases": ["combinatorial_purged_cv", "cpcv_gate"],
+    "short_tip": "将时间轴切分为 N 组并枚举所有 C(N,k) 组作为测试集，配合清除与禁运窗拼出多条完整样本外路径以度量过拟合分布。",
+    "formula_latex": "N_{\\text{comb}} = \\binom{N}{k}, \\quad N_{\\text{paths}} = \\frac{k}{N}\\binom{N}{k}",
+    "formula_lines": [
+      "默认配置: N=6, k=2 -> 15 种组合、5 条完整 OOS 路径（或 N=10, k=2 -> 45 组合）",
+      "强制伴随 Purge + Embargo，且零冲突、PBO <= 0.25、DSR >= 0.95"
+    ],
+    "institutional_threshold": "Purge 冲突 = 0，PBO <= 0.25，DSR >= 0.95，OOS/IS >= 0.50（全项硬门禁）",
+    "common_pitfalls": [
+      "使用普通随机 K-Fold 交叉验证金融时序，会把测试集相邻标签直接泄漏进训练集",
+      "只在冻结收益矩阵上挑最佳参数而未把特征标准化/模型拟合放进每折内部，仍可能残留轻微泄漏"
+    ],
+    "related_terms": ["purge", "embargo", "pbo", "dsr", "walk_forward", "negative_paths"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（对象 {entity_id}）解读「{term}」结果：{value}（门槛：{institutional_threshold}），逐项评估 PBO、DSR、负路径占比与门禁结论。"
+  },
+  {
+    "term_id": "purge",
+    "term": "标签清除 (Purging)",
+    "en_name": "Training-Test Overlap Purging",
+    "domain": "Q3",
+    "category": "validation",
+    "aliases": ["purging", "purge_days", "purge_embargo", "purge_conflicts"],
+    "short_tip": "从训练集中剔除所有标签持有区间与测试集时间窗存在重叠的样本，彻底阻断多日收益标签跨边界泄漏。",
+    "formula_latex": "\\mathcal{I}_{\\text{train}}^{\\text{purged}} = \\left\\{ i \\in \\mathcal{I}_{\\text{train}} : [t_i, t_i + h] \\cap \\mathcal{T}_{\\text{test}} = \\emptyset \\right\\}",
+    "formula_lines": [
+      "若预测标签为 h 日收益，训练样本 [t_i, t_i + h] 不得与任意测试块重叠",
+      "Hard Gate: purge_conflicts == 0"
+    ],
+    "institutional_threshold": "Purge 边界冲突数 = 0（purge_days >= 预测标签持有窗口 h）",
+    "common_pitfalls": [
+      "预测 20 日收益却只设 purge_days = 1，导致训练集尾部 19 天与测试集头部标签高度重叠",
+      "忽视测试块左侧与右侧双边边界的重叠清理"
+    ],
+    "related_terms": ["embargo", "cpcv", "pbo", "look_ahead_bias"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（对象 {entity_id}）核查「{term}」：当前冲突数/窗口 {value}（门槛：{institutional_threshold}），确认标签窗口与清除窗口是否匹配。"
+  },
+  {
+    "term_id": "embargo",
+    "term": "隔离禁运期 (Embargo)",
+    "en_name": "Post-Test Embargo Buffer",
+    "domain": "Q3",
+    "category": "validation",
+    "aliases": ["embargo_days", "embargo_window"],
+    "short_tip": "在每个测试集时间块结束之后额外空出一段隔离缓冲区不纳入训练集，防止金融序列强自相关向后泄漏信息。",
+    "formula_latex": "\\mathcal{I}_{\\text{embargo}} = \\left( t_{\\text{test,end}},\\; t_{\\text{test,end}} + \\Delta_{\\text{embargo}} \\right]",
+    "formula_lines": [
+      "紧随测试块尾部剔除 embargo_days 个交易日（默认 10 日）",
+      "机构要求: embargo_days >= 标签窗口 h（且 >= 因子半衰期）"
+    ],
+    "institutional_threshold": "embargo_days >= 标签持有期（默认 >= 10 交易日）",
+    "common_pitfalls": [
+      "只做 Purge 不做 Embargo，长窗口滚动特征（如 60D 动量/波动率）仍会跨过测试集右边界泄漏状态",
+      "在短样本上设置过大禁运期导致训练集过度缩水，降低估计稳定性"
+    ],
+    "related_terms": ["purge", "cpcv", "half_life", "walk_forward"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（对象 {entity_id}）解读「{term}」设置 {value}（建议：{institutional_threshold}），评估其与因子滚动窗口及标签期的匹配度。"
+  },
+  {
+    "term_id": "pbo",
+    "term": "回测过拟合概率 (PBO)",
+    "en_name": "Probability of Backtest Overfitting (CSCV)",
+    "domain": "Q3",
+    "category": "validation",
+    "aliases": ["cpcv_pbo", "cscv_pbo", "overfitting_probability"],
+    "short_tip": "通过组合对称交叉验证（CSCV）测算：样本内选出的冠军策略在样本外跌至所有候选策略中位数以下的概率。",
+    "formula_latex": "\\bar{\\omega}_c = \\frac{\\operatorname{rank}_{\\text{OOS}}(n_c^*)}{M + 1}, \\quad \\lambda_c = \\ln\\!\\left(\\frac{\\bar{\\omega}_c}{1 - \\bar{\\omega}_c}\\right), \\quad \\text{PBO} = \\mathbb{P}(\\lambda_c < 0)",
+    "formula_lines": [
+      "lambda_c = logit(rank_OOS(IS_winner) / (M + 1))",
+      "PBO = mean(lambda_c < 0) | Hard Gate (INSTITUTIONAL_GATES.cpcv_pbo_max): <= 0.25 (WARN: 0.20 - 0.25)"
+    ],
+    "institutional_threshold": "正式入库 PBO <= 0.25（INSTITUTIONAL_GATES.cpcv_pbo_max）；0.20–0.25 为 WARN；> 0.25 拒收",
+    "common_pitfalls": [
+      "只报告 PBO 而不如实纳入全部试错候选策略集合，候选数过少会让 PBO 估计失真",
+      "Purge/Embargo 过短会使相邻样本互抄答案，令 PBO 系统性偏低（虚假安全）"
+    ],
+    "related_terms": ["dsr", "cpcv", "trial_count_m", "oos_is_ratio", "bh_fdr"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（{universe_id}，对象 {entity_id}）深度解读「{term}」：当前值 {value}（门槛：{institutional_threshold}，试验数 M={trial_count_m}）。解释该值背后的过拟合风险与下一步减参建议。"
+  },
+  {
+    "term_id": "dsr",
+    "term": "折减夏普比率 (DSR)",
+    "en_name": "Deflated Sharpe Ratio",
+    "domain": "Q3",
+    "category": "validation",
+    "aliases": ["deflated_sharpe_ratio", "bailey_dsr"],
+    "short_tip": "扣除反复试错 M 次的运气极大值偏差以及收益偏度/峰度影响后，策略真实夏普大于零的统计置信概率。",
+    "formula_latex": "\\text{DSR} = \\Phi\\!\\left(\\frac{(\\widehat{\\text{SR}} - \\text{SR}_0(M))\\sqrt{T - 1}}{\\sqrt{1 - \\hat{\\gamma}_3 \\widehat{\\text{SR}} + \\frac{\\hat{\\gamma}_4 - 1}{4}\\widehat{\\text{SR}}^2}}\\right)",
+    "formula_lines": [
+      "SR_0(M) = std(SR_trials) * ((1 - gamma)*Phi^{-1}(1 - 1/M) + gamma*Phi^{-1}(1 - 1/(M*e)))",
+      "Hard Gate (INSTITUTIONAL_GATES.dsr_min): >= 0.95 (WARN: 0.90 - 0.95)"
+    ],
+    "institutional_threshold": "正式入库 DSR >= 0.95（INSTITUTIONAL_GATES.dsr_min）；0.90–0.95 为 WARN；< 0.90 拒收",
+    "common_pitfalls": [
+      "隐瞒历史淘汰试验次数（人为压低 trial_count_m）会导致 DSR 虚高，属于典型 p-hacking",
+      "忽略收益负偏度与高峰度会严重低估夏普抽样方差，夸大统计置信度"
+    ],
+    "related_terms": ["pbo", "trial_count_m", "bh_fdr", "sharpe_is_oos", "cpcv"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（{universe_id}，对象 {entity_id}）深度解读「{term}」：当前值 {value}（试验数 M={trial_count_m}，门槛：{institutional_threshold}）。说明多重检验惩罚与非正态矩对 DSR 的影响，并给出改进路径。"
+  },
+  {
+    "term_id": "trial_count_m",
+    "term": "累计试验次数 (M)",
+    "en_name": "Cumulative Multiple-Testing Trial Count M",
+    "domain": "Q3",
+    "category": "validation",
+    "aliases": ["m_trials", "n_trials", "effective_trials"],
+    "short_tip": "为筛选出当前最优策略或因子在同族研究中累计尝试过的总配置数（必须包含已淘汰和墓碑库记录）。",
+    "formula_latex": "M_{\\text{total}} = M_{\\text{active}} + M_{\\text{falsified,family}}",
+    "formula_lines": [
+      "M 随搜索次数递增，直接抬高 DSR 基准线 SR_0(M) 与 BH-FDR 校正阈值",
+      "严禁只报存活实验数而隐瞒已证伪试错次数"
+    ],
+    "institutional_threshold": "必须如实申报并自动累加同家族研究与墓碑库试错总数（零漏报）",
+    "common_pitfalls": [
+      "只改窗口参数（如 20D->21D）后重置 M=1，实质上是隐藏多重检验次数的学术舞弊",
+      "跨研究员重复试错同一方向却未共享墓碑库，导致整个团队实际 M 远高于名义申报值"
+    ],
+    "related_terms": ["dsr", "bh_fdr", "pbo", "param_cliff"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（对象 {entity_id}）评估「{term}」：当前申报 M={value}（规范：{institutional_threshold}），核查是否已纳入同家族及墓碑库历史试验次数。"
+  },
+  {
+    "term_id": "walk_forward",
+    "term": "滚动样本外验证 (Walk-Forward)",
+    "en_name": "Walk-Forward Out-of-Sample Validation",
+    "domain": "Q3",
+    "category": "validation",
+    "aliases": ["walk_forward_validation", "rolling_oos", "wf_folds"],
+    "short_tip": "严格按照真实时间先后顺序滚动划分训练窗与样本外测试窗，验证策略在真实演化市场环境下的持续适应力。",
+    "formula_latex": "\\text{Train}_j = [t_0, t_j - p], \\quad \\text{Test}_j = [t_j, t_j + w], \\quad j = 1, \\dots, J",
+    "formula_lines": [
+      "按时间顺序滚动拟合与测试，相邻折间保留 Purge + Embargo",
+      "机构要求: 至少存在有效测试折且 OOS IR 均值 >= 0"
+    ],
+    "institutional_threshold": "各滚动折 OOS 表现稳定（均值 IR >= 0），无连续多折系统性崩溃",
+    "common_pitfalls": [
+      "Walk-Forward 只生成一条历史时间路径，单一牛熊周期偶然性大，必须与 CPCV 互补使用",
+      "在特征选择或超参数确定阶段偷看全部历史后再跑 Walk-Forward，使其退化为伪样本外"
+    ],
+    "related_terms": ["cpcv", "oos_is_ratio", "purge", "embargo", "regime_shift"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（对象 {entity_id}）解读「{term}」结果 {value}（要求：{institutional_threshold}），分析哪些历史时间折表现最弱及对应的市场状态。"
+  },
+  {
+    "term_id": "negative_paths",
+    "term": "负夏普路径占比",
+    "en_name": "Negative OOS Path Ratio",
+    "domain": "Q3",
+    "category": "validation",
+    "aliases": ["negative_path_count", "negative_path_ratio"],
+    "short_tip": "在 CPCV 生成的全部完整样本外路径中，样本外夏普比率小于零的路径数量及占比，衡量策略的尾部失效风险。",
+    "formula_latex": "p_{\\text{neg}} = \\frac{1}{N_{\\text{paths}}}\\sum_{j=1}^{N_{\\text{paths}}} \\mathbf{1}\\!\\left(\\text{SR}_{\\text{OOS}, j} < 0\\right)",
+    "formula_lines": [
+      "negative_path_ratio = count(OOS_path_sharpe < 0) / n_oos_paths",
+      "机构参考: <= 20%（理想状态 = 0）"
+    ],
+    "institutional_threshold": "负夏普路径占比建议 <= 20%（若 > 20% 说明策略在不同组合路径下高度不稳定）",
+    "common_pitfalls": [
+      "仅关注中位数或均值 OOS Sharpe，忽略部分路径深度亏损的右偏/双峰分布风险",
+      "测试路径总数过少（如 < 5 条）时，单条路径变化会令占比剧烈跳动"
+    ],
+    "related_terms": ["cpcv", "pbo", "oos_is_ratio", "regime_shift"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（对象 {entity_id}）解读「{term}」：当前值 {value}（参考：{institutional_threshold}），定位亏损路径对应的时间区间与失效根因。"
+  },
+  {
+    "term_id": "barra_cne6",
+    "term": "Barra CNE6 多因子风险模型",
+    "en_name": "Barra CNE6 China Equity Risk Model",
+    "domain": "Q4",
+    "category": "risk",
+    "aliases": ["barra", "cne6", "risk_model", "wls_factor_regression"],
+    "short_tip": "将 A 股股票收益与协方差分解为国家、申万行业、10 大风格因子（规模/贝塔/动量/波动等）与特质风险的结构化模型。",
+    "formula_latex": "r_t = X_t f_t + u_t, \\quad \\Sigma_t = X_t F_t X_t^{\\top} + \\Delta_t",
+    "formula_lines": [
+      "r_t = X_style * f_style + X_industry * f_industry + u_specific (市值平方根 WLS 估计)",
+      "Sigma = X * F * X^T + Delta (F 为因子协方差矩阵，Delta 为对角特质方差)"
+    ],
+    "institutional_threshold": "因子协方差经 Ledoit-Wolf 收缩且满足 PSD（λmin >= -1e-10）；纯风格暴露硬红线 <= 0.50σ",
+    "common_pitfalls": [
+      "直接用样本协方差矩阵替代结构化风险模型，当股票数 N 大于交易日数 T 时矩阵奇异不可逆",
+      "将开源代理描述符当成授权商用 MSCI Barra 数据做跨平台绝对值比对"
+    ],
+    "related_terms": ["style_exposure", "risk_decomposition", "ledoit_wolf", "psd", "barra_attribution"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（{universe_id}，对象 {entity_id}）解读「{term}」风险画像：{value}，核查风格暴露、特质风险占比与协方差正定性。"
+  },
+  {
+    "term_id": "style_exposure",
+    "term": "主动风格暴露 (σ)",
+    "en_name": "Active Barra Style Exposure (z-score)",
+    "domain": "Q4",
+    "category": "risk",
+    "aliases": ["active_style_exposure", "barra_style_exposure", "max_style_z", "max_size_z"],
+    "short_tip": "投资组合相对基准在某一 Barra 风格因子上的加权 z-score 偏离，超过红线意味着策略在赌风格而非选股。",
+    "formula_latex": "z^{\\text{active}}_k = (w_p - w_b)^{\\top} X_{\\cdot, k}",
+    "formula_lines": [
+      "active_style_z = (w_portfolio - w_benchmark)^T * exposure_k",
+      "Hard Gate (INSTITUTIONAL_GATES.barra_style_hard_limit): |z| <= 0.50σ (WARN: 0.30 - 0.50σ)"
+    ],
+    "institutional_threshold": "硬红线 |z| <= 0.50σ（INSTITUTIONAL_GATES.barra_style_hard_limit）；0.30–0.50σ 为 WARN",
+    "common_pitfalls": [
+      "优化前不做风格约束，导致组合在 Size（小市值）或 ResidualVolatility 上偏离超 1.0σ，风格切换即剧烈回撤",
+      "约束过死引发优化器不可行，触发软松弛（RELAXED_OPTIMAL）却未复核松弛后的真实暴露"
+    ],
+    "related_terms": ["barra_cne6", "industry_active_dev", "residual_exposure", "solve_status"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（{universe_id}，对象 {entity_id}）诊断「{term}」：当前值 {value}（门槛：{institutional_threshold}）。判断是否触碰风格红线并给出 cvxpy 约束调整建议。"
+  },
+  {
+    "term_id": "industry_active_dev",
+    "term": "申万行业主动偏离",
+    "en_name": "Active Industry Weight Deviation",
+    "domain": "Q4",
+    "category": "risk",
+    "aliases": ["industry_active_deviation", "max_industry_dev", "sector_deviation"],
+    "short_tip": "投资组合在单个申万一级行业上的持仓权重与基准指数权重之差，用于控制行业集中度与板块踏空风险。",
+    "formula_latex": "\\Delta w_{\\text{ind}, k} = \\sum_{i \\in \\text{Ind}_k} (w_{p,i} - w_{b,i}), \\quad \\sum_{k} \\Delta w_{\\text{ind}, k} = 0",
+    "formula_lines": [
+      "active_weight(k) = sum_{i in k}(w_p[i] - w_b[i])",
+      "守恒律: sum_k active_weight(k) == 0 | 默认指数增强约束: |Δw| <= ±3%"
+    ],
+    "institutional_threshold": "默认指数增强行业主动偏离 <= ±3.0%，且全行业主动权重和恒为 0",
+    "common_pitfalls": [
+      "全行业主动偏离绝对值未设上限，导致组合单押电子/医药等热门板块，沦为行业主题基金",
+      "组合现金拖累或未满仓时忽略行业主动权重总和不再等于 0"
+    ],
+    "related_terms": ["sw_industry_pit", "style_exposure", "tracking_error", "brinson_allocation"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（{universe_id}，对象 {entity_id}）解读「{term}」：当前最大偏离 {value}（门槛：{institutional_threshold}），评估行业风险暴露是否可控。"
+  },
+  {
+    "term_id": "tracking_error",
+    "term": "预测年化跟踪误差 (TE)",
+    "en_name": "Predicted Annualized Tracking Error",
+    "domain": "Q4",
+    "category": "risk",
+    "aliases": ["predicted_tracking_error", "te", "active_risk", "target_te"],
+    "short_tip": "组合相对基准超额收益波动率的年化预测标准差，是指数增强策略风险预算的核心总控阀门。",
+    "formula_latex": "\\text{TE}_{\\text{ann}} = \\sqrt{252 \\cdot (w_p - w_b)^{\\top} \\Sigma (w_p - w_b)}",
+    "formula_lines": [
+      "TE_pred = sqrt(252 * w_active^T * Sigma * w_active)",
+      "默认指增目标上限: TE <= 5.0%（守恒复算偏差 < 1bp）"
+    ],
+    "institutional_threshold": "指数增强默认目标 TE <= 5.0%，且优化器输出与独立复算偏差 < 1.0 bp",
+    "common_pitfalls": [
+      "在低波动市场估计的协方差在危机爆发时低估真实事后跟踪误差（预测 TE 5% 实际跑到 10%）",
+      "为追求高超额无限制放大 TE，反而拉低信息比率（IR）并引发超额大幅回撤"
+    ],
+    "related_terms": ["information_ratio", "risk_decomposition", "barra_cne6", "excess_drawdown"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（{universe_id}，对象 {entity_id}）解读「{term}」：当前值 {value}（门槛：{institutional_threshold}），分析风险预算消耗结构并给出 TE 档位建议。"
+  },
+  {
+    "term_id": "information_ratio",
+    "term": "信息比率 (IR)",
+    "en_name": "Information Ratio",
+    "domain": "Q4",
+    "category": "risk",
+    "aliases": ["ir", "expected_ir", "info_ratio"],
+    "short_tip": "组合年化超额收益除以年化跟踪误差，衡量每承担 1 个单位主动偏离风险所换取的超额收益效率。",
+    "formula_latex": "\\text{IR} = \\frac{R_{p,\\text{ann}} - R_{b,\\text{ann}}}{\\text{TE}_{\\text{ann}}} \\approx \\text{IC} \\cdot \\sqrt{\\text{BR}} \\cdot \\text{TC}",
+    "formula_lines": [
+      "IR = annualized_net_excess / annualized_tracking_error",
+      "主动管理基本定律: IR ≈ IC * sqrt(Breadth) * Transfer_Coefficient"
+    ],
+    "institutional_threshold": "机构参考净 IR >= 0.50（优秀指增 >= 1.00，须基于事件驱动扣费净超额）",
+    "common_pitfalls": [
+      "用未扣交易费用的毛预期超额计算事前 IR，严重高于实盘扣费后的事后净 IR",
+      "高约束下转换系数 TC 暴跌，即使单因子 IC 很高组合 IR 也可能远低于理论值"
+    ],
+    "related_terms": ["tracking_error", "icir", "gross_vs_net", "calmar"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（{universe_id}，对象 {entity_id}）解读「{term}」：当前值 {value}（参考：{institutional_threshold}），拆解超额收益与跟踪误差的性价比。"
+  },
+  {
+    "term_id": "turnover_lambda",
+    "term": "换手惩罚系数 (λ)",
+    "en_name": "L1 Turnover Penalty Coefficient",
+    "domain": "Q4",
+    "category": "risk",
+    "aliases": ["turnover_penalty_lambda", "l1_penalty", "cost_aversion"],
+    "short_tip": "凸组合优化目标函数中对 L1 调仓换手量的惩罚权重，用于在 Alpha 捕捉与交易成本控制之间做连续权衡。",
+    "formula_latex": "\\max_{w} \\; \\alpha^{\\top} w - \\frac{\\gamma}{2}(w - w_b)^{\\top}\\Sigma(w - w_b) - \\lambda \\|w - w_{\\text{prev}}\\|_1",
+    "formula_lines": [
+      "Objective = alpha^T w - risk_term - lambda * sum(|w - w_prev|)",
+      "提高 lambda -> 降低单边换手与冲击成本，同时降低信号转换系数 TC"
+    ],
+    "institutional_threshold": "需与单边换手硬上限及交易成本量纲一致（建议结合容量前沿做灵敏度扫描）",
+    "common_pitfalls": [
+      "预期 Alpha 与风险/换手惩罚项不在同一时间量纲（如日频成本配年化 Alpha），导致 λ 调节失效",
+      "λ 过大造成组合僵化，无法及时剔除已衰减或触发风控的持仓"
+    ],
+    "related_terms": ["turnover_oneway", "opt_objective", "sqrt_impact", "capacity_frontier"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（{universe_id}，对象 {entity_id}）解读「{term}」：当前设置 {value}，评估调高/调低 λ 对预期净超额与年化换手的边际影响。"
+  },
+  {
+    "term_id": "enc",
+    "term": "有效持股数 (ENC)",
+    "en_name": "Effective Number of Constituents",
+    "domain": "Q4",
+    "category": "risk",
+    "aliases": ["effective_n_stocks", "herfindahl_inverse", "effective_n"],
+    "short_tip": "持仓权重平方和的倒数（1/Σw_i²），等价于将当前组合分散度折算为多少只等权股票，衡量组合集中度风险。",
+    "formula_latex": "\\text{ENC} = \\frac{1}{\\sum_{i=1}^{N} w_i^2}",
+    "formula_lines": [
+      "ENC = 1 / sum(w_i^2)  (全等权 N 只股时 ENC = N)",
+      "机构参考: ENC >= 30（中证 500 增强通常建议 >= 40–80）"
+    ],
+    "institutional_threshold": "机构参考 ENC >= 30（避免少数重仓票的黑天鹅特质风险主导组合）",
+    "common_pitfalls": [
+      "名义持有 100 只股票但前 10 只占 70% 权重，ENC 可能不足 15，实际高度集中",
+      "在宽基指增中 ENC 过低会大幅放大单票个股踩雷对跟踪误差的冲击"
+    ],
+    "related_terms": ["tracking_error", "risk_decomposition", "capacity_frontier", "opt_objective"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（{universe_id}，对象 {entity_id}）解读「{term}」：当前值 {value}（参考：{institutional_threshold}），评估组合分散度与个股集中风险。"
+  },
+  {
+    "term_id": "ledoit_wolf",
+    "term": "Ledoit-Wolf 协方差收缩",
+    "en_name": "Ledoit-Wolf Shrinkage Covariance Estimator",
+    "domain": "Q4",
+    "category": "risk",
+    "aliases": ["ledoit_wolf_shrinkage", "shrinkage_cov", "lw_shrinkage"],
+    "short_tip": "将充满估计噪声的样本协方差矩阵以最优权重 δ 向结构化目标矩阵收缩，提升逆矩阵条件数并稳健预测组合风险。",
+    "formula_latex": "\\widehat{\\Sigma}_{\\text{LW}} = (1 - \\hat{\\delta}) S + \\hat{\\delta} F_{\\text{target}}, \\quad \\hat{\\delta} \\in [0, 1]",
+    "formula_lines": [
+      "Sigma_LW = (1 - delta) * S_sample + delta * Target",
+      "收缩强度 delta in [0, 1]；有效抑制样本极端特征值放大优化误差"
+    ],
+    "institutional_threshold": "收缩强度 δ ∈ [0, 1]，输出协方差矩阵必须严格满足 PSD（λmin >= -1e-10）",
+    "common_pitfalls": [
+      "样本天数过短却不做收缩，均值-方差优化器会疯狂利用最小噪声特征值制造虚假极低风险",
+      "使用全样本未来数据拟合收缩系数 δ，破坏因果前缀不变性"
+    ],
+    "related_terms": ["psd", "barra_cne6", "risk_decomposition", "opt_objective"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（对象 {entity_id}）解读「{term}」：当前参数/状态 {value}（要求：{institutional_threshold}），说明协方差收缩如何改善优化稳定性。"
+  },
+  {
+    "term_id": "psd",
+    "term": "半正定矩阵与最小特征值 (PSD)",
+    "en_name": "Positive Semi-Definite Matrix & Minimum Eigenvalue",
+    "domain": "Q4",
+    "category": "risk",
+    "aliases": ["psd_min_eigenvalue", "positive_semidefinite", "lambda_min"],
+    "short_tip": "协方差矩阵的所有特征值必须非负；若出现负特征值，凸优化器会数学上“凭空造出负方差”导致求解发散或失真。",
+    "formula_latex": "\\forall\\, w \\in \\mathbb{R}^N,\\; w^{\\top}\\Sigma w \\ge 0 \\iff \\lambda_{\\min}(\\Sigma) \\ge 0",
+    "formula_lines": [
+      "lambda_min(Sigma) >= -1e-10 (浮点数值容差)",
+      "非 PSD 时须做特征值截断修复并记录修复审计"
+    ],
+    "institutional_threshold": "硬守恒门禁：λmin(Σ) >= -1e-10（特征值严格非负，确保 cvxpy 凸性成立）",
+    "common_pitfalls": [
+      "成对缺失值分别算相关系数拼成的协方差矩阵经常非半正定，直接传入二次规划会报 DCPError 或无界解",
+      "忽略数值精度漂移导致对称性破坏（Σ != Σ^T）"
+    ],
+    "related_terms": ["ledoit_wolf", "conservation_law", "barra_cne6", "solve_status"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（对象 {entity_id}）解读「{term}」验算结果 {value}（门槛：{institutional_threshold}），确认风险矩阵凸性与数值健康状态。"
+  },
+  {
+    "term_id": "risk_decomposition",
+    "term": "欧拉风险分解",
+    "en_name": "Euler Marginal Risk Decomposition",
+    "domain": "Q4",
+    "category": "risk",
+    "aliases": ["euler_risk_decomposition", "specific_risk_share", "te_decomposition"],
+    "short_tip": "将组合预测跟踪误差方差精确拆解为风格风险、行业风险与特质选股风险三大占比，验证风险预算是否花在刀刃上。",
+    "formula_latex": "\\text{TE}^2 = \\underbrace{w_a^{\\top} X_s F_s X_s^{\\top} w_a}_{\\text{Style}} + \\underbrace{w_a^{\\top} X_I F_I X_I^{\\top} w_a}_{\\text{Industry}} + \\underbrace{w_a^{\\top} \\Delta w_a}_{\\text{Specific}} + \\text{Cov}_{\\text{cross}}",
+    "formula_lines": [
+      "style_risk_share + industry_risk_share + specific_risk_share = 100%",
+      "优质选股组合建议特质风险占比 >= 50%（避免沦为风格/行业押注）"
+    ],
+    "institutional_threshold": "三项占比闭合和 = 100%；纯 Alpha 选股组合建议特质风险占比 >= 50%",
+    "common_pitfalls": [
+      "名义上控制了单风格 z-score <= 0.5σ，但多个风格协同暴露叠加后仍占去 60% 以上主动风险",
+      "忽略风格与行业因子之间的交叉协方差项，导致分项和无法闭合"
+    ],
+    "related_terms": ["barra_cne6", "tracking_error", "style_exposure", "barra_attribution"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（{universe_id}，对象 {entity_id}）解读「{term}」：当前占比 {value}（参考：{institutional_threshold}），判断主动风险预算是否过度消耗在风格或行业上。"
+  },
+  {
+    "term_id": "opt_objective",
+    "term": "凸组合优化目标函数",
+    "en_name": "Convex Portfolio Optimization Objective",
+    "domain": "Q4",
+    "category": "risk",
+    "aliases": ["convex_portfolio_optimization", "objective", "max_sharpe", "mean_variance"],
+    "short_tip": "在权重单纯形、风格、行业、TE 与换手等硬约束下，决定如何在预期收益、风险厌恶与分散度之间求最优解。",
+    "formula_latex": "\\max_{w \\in \\mathcal{C}} \\; \\alpha^{\\top} w - \\frac{\\gamma}{2}(w - w_b)^{\\top}\\Sigma(w - w_b) - \\lambda \\|w - w_{\\text{prev}}\\|_1",
+    "formula_lines": [
+      "可选目标: max_sharpe | mean_variance | min_var | risk_parity",
+      "凸求解器: CLARABEL / OSQP + 后验约束违背量复核 (<= 1e-6)"
+    ],
+    "institutional_threshold": "求解状态需为 optimal 且 max_constraint_violation <= 1e-6，Σw = 1 严格守恒",
+    "common_pitfalls": [
+      "Alpha 信号未经尺度校准直接与方差项相加，等效于隐式选择了极端的风险厌恶系数 γ",
+      "仅在单期静态优化验证通过，却未在多期动态回测中真实接入 cvxpy 权重生成"
+    ],
+    "related_terms": ["solve_status", "turnover_lambda", "tracking_error", "conservation_law"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（{universe_id}，对象 {entity_id}）解读「{term}」配置 {value}，比较当前目标函数在风险约束下的收益-换手权衡。"
+  },
+  {
+    "term_id": "solve_status",
+    "term": "优化求解状态与软松弛",
+    "en_name": "Convex Solver Status & Soft Relaxation",
+    "domain": "Q4",
+    "category": "risk",
+    "aliases": ["relaxed_optimal", "solver_status", "infeasible", "max_constraint_violation"],
+    "short_tip": "指示 cvxpy 求解器是否严格满足全部约束：RELAXED_OPTIMAL 说明原始约束过紧无可行解，已按优先级做受控松弛。",
+    "formula_latex": "\\max_{j} \\max\\!\\left(0,\\; g_j(w^*)\\right) \\le 10^{-6}",
+    "formula_lines": [
+      "optimal: 严格满足所有硬约束 | relaxed_optimal: 触发受控松弛并附 relaxation_notes",
+      "infeasible: 无解（禁止静默回退为等权或虚构权重）"
+    ],
+    "institutional_threshold": "理想状态 = optimal 且 max_constraint_violation <= 1e-6；relaxed_optimal 必须审查松弛明细",
+    "common_pitfalls": [
+      "盲目信任求解器返回的 optimal_inaccurate 而不独立重算约束违背量（Σw-1、风格 z、行业偏离）",
+      "把 T+1 锁定仓位、停牌股冻结与过紧的 TE/换手上限叠加，导致每日频繁不可行"
+    ],
+    "related_terms": ["opt_objective", "conservation_law", "psd", "style_exposure"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（对象 {entity_id}）解读「{term}」：当前状态 {value}（要求：{institutional_threshold}）。若发生松弛或不可行，定位相互冲突的约束并给出修复补丁。"
+  },
+  {
+    "term_id": "capacity_frontier",
+    "term": "AUM 策略容量前沿",
+    "en_name": "AUM Capacity & Market Impact Frontier",
+    "domain": "Q4",
+    "category": "risk",
+    "aliases": ["aum_capacity_frontier", "half_alpha_aum", "breakeven_aum", "strategy_capacity"],
+    "short_tip": "刻画随着管理资金规模（AUM）放大，平方根市场冲击与 PoV 限制如何逐步吞噬净超额收益的衰减曲线。",
+    "formula_latex": "R_{\\text{net}}(\\text{AUM}) = R_{\\text{gross}} - C_{\\text{explicit}} - C_{\\text{impact}}(\\text{AUM}), \\quad C_{\\text{impact}} \\propto \\sigma \\sqrt{\\frac{\\text{AUM} \\cdot \\text{TO}}{\\text{ADV}}}",
+    "formula_lines": [
+      "Half-Alpha AUM: 净超额衰减至基准净超额 50% 时的资金规模",
+      "Breakeven AUM: 净超额被冲击摩擦完全吞噬归零时的资金上限"
+    ],
+    "institutional_threshold": "Half-Alpha AUM <= Breakeven AUM；目标管理规模须低于 Half-Alpha AUM 且流动性瓶颈可控",
+    "common_pitfalls": [
+      "用 1000 万资金测出的高年化超额去募集 10 亿产品，结果实盘冲击成本翻 10 倍导致收益归零",
+      "只看全市场平均成交额而忽略最不流动的 Top-10 小盘瓶颈标的"
+    ],
+    "related_terms": ["sqrt_impact", "pov", "turnover_oneway", "liquidity_impact"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（{universe_id}，对象 {entity_id}）解读「{term}」：当前容量评估 {value}（要求：{institutional_threshold}）。定位流动性瓶颈标的并提出扩容方案。"
+  },
+  {
+    "term_id": "t_plus_1",
+    "term": "A 股 T+1 交收约束",
+    "en_name": "A-Share T+1 Settlement Lock",
+    "domain": "Q5",
+    "category": "backtest",
+    "aliases": ["t_plus_1_lock", "t1_rule", "settlement_lock"],
+    "short_tip": "A 股当日买入的股份次一交易日方可卖出，当日仅可卖出昨日及之前已持有的可用股份，严禁日内回转透支。",
+    "formula_latex": "Q^{\\text{sell}}_{i,t} \\le Q^{\\text{avail}}_{i,t} = Q^{\\text{pos}}_{i, t-1}",
+    "formula_lines": [
+      "sell_shares(t) <= previous_day_settled_shares(t-1)",
+      "Hard Invariant: T+1 违规卖出笔数 == 0"
+    ],
+    "institutional_threshold": "回测 T+1 违规 = 0 笔；所有卖出撮合严格校验可用持仓",
+    "common_pitfalls": [
+      "向量化回测默认可无摩擦日内买卖，严重高估高频反转因子的实盘净值",
+      "忽略送转股到账日与 T+1 解锁时点，导致可用股数记账错误"
+    ],
+    "related_terms": ["price_limit_rules", "gross_vs_net", "conservation_law", "half_life"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（对象 {entity_id}）解读「{term}」对回测的影响：当前锁定/拒单情况 {value}（要求：{institutional_threshold}）。"
+  },
+  {
+    "term_id": "pov",
+    "term": "成交量参与率上限 (PoV)",
+    "en_name": "Percentage of Volume Participation Cap",
+    "domain": "Q5",
+    "category": "backtest",
+    "aliases": ["pov_participation_cap", "max_pov", "participation_rate"],
+    "short_tip": "单只股票当日下单成交股数占市场当日总成交量的比例上限，超过部分截断或顺延以防止过度冲击盘口。",
+    "formula_latex": "\\text{PoV}_{i,t} = \\frac{Q^{\\text{exec}}_{i,t}}{V^{\\text{market}}_{i,t}} \\le \\text{PoV}_{\\max}",
+    "formula_lines": [
+      "filled_shares <= min(target_delta_shares, max_pov * volume_shares)",
+      "默认机构保守上限: max_pov <= 5% (0.05)"
+    ],
+    "institutional_threshold": "单票单日参与率 <= max_pov（默认 5%）；触顶触发流动性截断与容量瓶颈告警",
+    "common_pitfalls": [
+      "不设 PoV 上限导致回测在日成交 500 万的小盘股上“轻松”买入 2000 万，完全脱离现实",
+      "盘中实际成交集中在开收盘，用全天成交量乘 5% 仍是乐观上界"
+    ],
+    "related_terms": ["sqrt_impact", "capacity_frontier", "fill_rate", "liquidity_impact"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（对象 {entity_id}）解读「{term}」：当前值 {value}（门槛：{institutional_threshold}），排查 PoV 截断对成交率和策略容量的制约。"
+  },
+  {
+    "term_id": "sqrt_impact",
+    "term": "平方根市场冲击模型",
+    "en_name": "Square-Root Market Impact Law",
+    "domain": "Q5",
+    "category": "backtest",
+    "aliases": ["square_root_market_impact", "almgren_chriss", "market_impact", "impact_bps"],
+    "short_tip": "大额交易引发的隐性滑点与个股波动率成正比、与下单量占日均成交额比例的平方根成正比（经典经验律）。",
+    "formula_latex": "\\Delta P_{\\text{impact}} \\text{ (bps)} = 10^4 \\cdot Y \\cdot \\sigma_{i,t} \\cdot \\sqrt{\\frac{Q_{i,t}}{\\text{ADV}_{i,t}}}",
+    "formula_lines": [
+      "impact_bps = 10000 * Y * sigma_daily * sqrt(order_notional / ADV)",
+      "默认冲击系数 Y = 0.45（须标注是否经实盘成交校准）"
+    ],
+    "institutional_threshold": "事件回测与容量分析强制计入；AUM 扩大 4 倍则单位冲击 bps 翻倍",
+    "common_pitfalls": [
+      "只扣固定 2–3 bps 线性滑点，在资金规模扩大或高波小盘股上严重低估真实冲击",
+      "未区分临时冲击与永久冲击，或把未校准参数 Y 当成精确券商成交承诺"
+    ],
+    "related_terms": ["capacity_frontier", "pov", "liquidity_impact", "stamp_duty"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（对象 {entity_id}）解读「{term}」：当前冲击估算 {value}，分析波动率与下单比例如何影响策略净超额和资金容量。"
+  },
+  {
+    "term_id": "stamp_duty",
+    "term": "A 股显性交易税费",
+    "en_name": "A-Share Stamp Duty, Commission & Transfer Fees",
+    "domain": "Q5",
+    "category": "backtest",
+    "aliases": ["explicit_fees", "commission_bps", "transfer_fee"],
+    "short_tip": "A 股显性摩擦成本总和：卖出单边 0.05%（5 bps，2023-08-28 起减半）印花税 + 双边佣金 + 过户费。",
+    "formula_latex": "C_{\\text{explicit}} = N_{\\text{buy}}(c_{\\text{comm}} + c_{\\text{xfer}}) + N_{\\text{sell}}(c_{\\text{comm}} + c_{\\text{xfer}} + c_{\\text{stamp}})",
+    "formula_lines": [
+      "默认费率: 卖出印花税 5.0 bps | 双边佣金 2.5 bps | 过户费 0.1 bps",
+      "双边单次完整换仓显性成本 ≈ 10.2 bps（不含冲击滑点）"
+    ],
+    "institutional_threshold": "事件回测强制按现行 A 股费率表逐笔扣减，摩擦守恒误差 = 0",
+    "common_pitfalls": [
+      "回测忘记扣除单边卖出印花税或误按旧税率 0.1%（2023-08-28 前）一刀切",
+      "高频日调仓年化单边换手 25 倍时，仅显性税费就可吃掉 2.5% 以上年化收益"
+    ],
+    "related_terms": ["turnover_oneway", "sqrt_impact", "gross_vs_net", "conservation_law"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（对象 {entity_id}）解读「{term}」：当前摩擦拆解 {value}，评估显性费用占总超额的比例与优化空间。"
+  },
+  {
+    "term_id": "gross_vs_net",
+    "term": "毛收益 vs 净收益口径",
+    "en_name": "Gross Screening vs Net Event-Driven Backtest",
+    "domain": "Q5",
+    "category": "backtest",
+    "aliases": ["event_vs_screening_engine", "gross_excess", "net_excess", "screening_vs_event"],
+    "short_tip": "向量化快筛（SCREENING）用于秒级初筛毛收益，事件驱动引擎（EVENT）严格执行 T+1、涨跌停、停牌、整手与冲击扣费得到可信净收益。",
+    "formula_latex": "R_{\\text{net}} = R_{\\text{gross}} - C_{\\text{comm}} - C_{\\text{stamp}} - C_{\\text{xfer}} - C_{\\text{impact}} - C_{\\text{limit/suspend}}",
+    "formula_lines": [
+      "SCREENING: 向量化快筛（近似摩擦、允许小数股）",
+      "EVENT: 逐日撮合净值（T+1/涨跌停/停牌/100 股整手/PoV/平方根冲击）"
+    ],
+    "institutional_threshold": "所有正式晋级与 VERIFIED 结论必须基于 EVENT 引擎扣费净收益（NET）",
+    "common_pitfalls": [
+      "拿着未扣摩擦的 SCREENING 毛净值向投委会汇报，实盘扣除税费和涨跌停后由盈转亏",
+      "毛净差值超过毛超额 50% 说明信号换手过高或流动性过差，属于不可落地伪 Alpha"
+    ],
+    "related_terms": ["t_plus_1", "stamp_duty", "sqrt_impact", "price_limit_rules", "conservation_law"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（对象 {entity_id}）对比「{term}」：当前毛/净差值 {value}（要求：{institutional_threshold}），定位哪项摩擦吞噬了最多超额。"
+  },
+  {
+    "term_id": "brinson_allocation",
+    "term": "Brinson 行业配置效应",
+    "en_name": "Brinson-Fachler Allocation Effect",
+    "domain": "Q5",
+    "category": "backtest",
+    "aliases": ["allocation_effect", "brinson_fachler_attribution"],
+    "short_tip": "衡量通过超配跑赢基准的行业、低配跑输基准的行业所带来的超额收益贡献。",
+    "formula_latex": "A_k = (w_{p,k} - w_{b,k})\\,(R_{b,k} - R_b)",
+    "formula_lines": [
+      "Allocation = sum_k (w_p[k] - w_b[k]) * (R_b[k] - R_b_total)",
+      "Brinson-Fachler 总闭合: Allocation + Selection + Interaction = Total_Excess (±1bp)"
+    ],
+    "institutional_threshold": "与选股、交互项之和须严格闭合总超额（|闭合误差| <= 1.0 bp）",
+    "common_pitfalls": [
+      "宣称是纯选股策略，结果 Brinson 归因显示 70% 超额来自行业配置押注而非行业内选股",
+      "多期简单相加各期配置效应而未采用 Carino 平滑链接权重，导致多期归因不闭合"
+    ],
+    "related_terms": ["brinson_selection", "brinson_interaction", "closure_error", "industry_active_dev"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（对象 {entity_id}）解读「{term}」：当前值 {value}，对照行业主动偏离判断配置收益是否符合策略定位。"
+  },
+  {
+    "term_id": "brinson_selection",
+    "term": "Brinson 行业内选股效应",
+    "en_name": "Brinson-Fachler Selection Effect",
+    "domain": "Q5",
+    "category": "backtest",
+    "aliases": ["selection_effect", "stock_selection"],
+    "short_tip": "在保持基准行业权重不变的前提下，凭借在各申万行业内部挑出跑赢行业基准的个股所贡献的纯选股超额。",
+    "formula_latex": "S_k = w_{b,k}\\,(R_{p,k} - R_{b,k})",
+    "formula_lines": [
+      "Selection = sum_k w_b[k] * (R_p[k] - R_b[k])",
+      "行业中性 Alpha 策略的核心收益来源应由 Selection 主导"
+    ],
+    "institutional_threshold": "行业中性增强策略应以选股效应为主要正向贡献，且 Brinson 闭合误差 <= 1.0 bp",
+    "common_pitfalls": [
+      "把交互效应强行合并进选股效应，夸大纯选股贡献",
+      "在基准权重为 0 的行业中买入个股时，Brinson 基准内选股项为 0，收益会全部落入交互项"
+    ],
+    "related_terms": ["brinson_allocation", "brinson_interaction", "closure_error", "barra_attribution"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（对象 {entity_id}）解读「{term}」：当前值 {value}，评估行业内选股能力的真实占比与持续性。"
+  },
+  {
+    "term_id": "brinson_interaction",
+    "term": "Brinson 交互效应",
+    "en_name": "Brinson-Fachler Interaction Effect",
+    "domain": "Q5",
+    "category": "backtest",
+    "aliases": ["interaction_effect", "multi_period_carino_linking"],
+    "short_tip": "同时超配某一行业且在该行业内选股跑赢行业基准时产生的交叉叠加收益，须单独列示保证归因恒等闭合。",
+    "formula_latex": "I_k = (w_{p,k} - w_{b,k})\\,(R_{p,k} - R_{b,k})",
+    "formula_lines": [
+      "Interaction = sum_k (w_p[k] - w_b[k]) * (R_p[k] - R_b[k])",
+      "多期采用 Carino 链接因子 k_t = (ln(1+r_p) - ln(1+r_b)) / (r_p - r_b) 保证几何闭合"
+    ],
+    "institutional_threshold": "单独透明列示（不隐匿进选股项），确保 A + S + I 闭合误差 <= 1.0 bp",
+    "common_pitfalls": [
+      "部分简版工具直接省略交互项，造成三项之和与真实总超额差出几十到上百 bps",
+      "交互项占比过大通常意味着策略在特定超配行业上做了高度集中的选股押注"
+    ],
+    "related_terms": ["brinson_allocation", "brinson_selection", "closure_error", "conservation_law"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（对象 {entity_id}）解读「{term}」：当前值 {value}，检查是否存在超大交互项集中风险及归因闭合度。"
+  },
+  {
+    "term_id": "closure_error",
+    "term": "归因闭合误差",
+    "en_name": "Attribution Closure Error",
+    "domain": "Q5",
+    "category": "backtest",
+    "aliases": ["brinson_closure_error_bp", "barra_closure_error_bp", "reconciliation_error"],
+    "short_tip": "Brinson 或 Barra 归因各分项之和与回测真实总超额收益之间的残余差额，用于硬核验算业绩归因无漏项无造假。",
+    "formula_latex": "\\varepsilon_{\\text{closure}} = \\left| R^{\\text{excess}}_{\\text{total}} - \\sum_m \\text{Attr}_m \\right| \\times 10^4 \\text{ (bp)}",
+    "formula_lines": [
+      "Brinson: |(Alloc + Select + Interact) - Excess_gross| <= 1.0 bp",
+      "Barra: |(Style + Industry + Specific + Cost) - Excess_net| <= 1.0 bp"
+    ],
+    "institutional_threshold": "硬守恒红线 |ε| <= 1.0 bp（INSTITUTIONAL_GATES.closure_error_bp_max）",
+    "common_pitfalls": [
+      "直接用残差倒推特质 Alpha 而不独立核算，虽然表面闭合为 0 却掩盖了现金、分红或费用记账错误",
+      "日度算术累加替代几何链接，在长回测区间上造成高达几十 bps 的伪闭合误差"
+    ],
+    "related_terms": ["conservation_law", "brinson_allocation", "barra_attribution", "gross_vs_net"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（对象 {entity_id}）核查「{term}」：当前值 {value}（门槛：{institutional_threshold}），判断归因会计恒等式是否严格闭合。"
+  },
+  {
+    "term_id": "barra_attribution",
+    "term": "Barra 收益归因（真假 Alpha 甄别）",
+    "en_name": "Barra Return Attribution (Pure Alpha vs Factor Beta)",
+    "domain": "Q5",
+    "category": "backtest",
+    "aliases": ["barra_return_attribution", "specific_alpha_share", "true_alpha"],
+    "short_tip": "将事后净超额收益拆分为风格因子收益、行业因子收益、交易成本与特质纯 Alpha，识破披着 Alpha 外衣的风格 Beta。",
+    "formula_latex": "R^{\\text{excess}}_{\\text{net}, t} = (w_{p,t} - w_{b,t})^{\\top} X_{s,t} f_{s,t} + (w_{p,t} - w_{b,t})^{\\top} X_{I,t} f_{I,t} + \\alpha^{\\text{spec}}_t - C_t",
+    "formula_lines": [
+      "Net_Excess = Style_Beta + Industry_Beta + Specific_Alpha + Cost",
+      "机构真 Alpha 标准: Specific_Alpha 占比 >= 65% 且闭合误差 <= 1.0 bp"
+    ],
+    "institutional_threshold": "特质纯 Alpha 贡献建议 >= 65%，归因闭合误差 <= 1.0 bp",
+    "common_pitfalls": [
+      "牛市里靠高 Beta 和小市值暴涨赚了 15% 超额，Barra 归因却发现特质 Alpha 为负",
+      "忽略交易成本项导致正的特质毛 Alpha 在扣费后转为负值"
+    ],
+    "related_terms": ["barra_cne6", "closure_error", "style_exposure", "risk_decomposition"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（{universe_id}，对象 {entity_id}）解读「{term}」：当前拆解 {value}（要求：{institutional_threshold}），甄别收益究竟来自纯特质 Alpha 还是风格/行业 Beta。"
+  },
+  {
+    "term_id": "max_drawdown",
+    "term": "最大回撤与水下曲线",
+    "en_name": "Maximum Drawdown & Underwater Curve",
+    "domain": "Q5",
+    "category": "backtest",
+    "aliases": ["mdd", "max_drawdown_pct", "underwater"],
+    "short_tip": "净值曲线从任意历史最高点回落到后续最低点的最大百分比跌幅，度量投资者在最坏时点承受的账面亏损。",
+    "formula_latex": "\\text{DD}_t = \\frac{\\text{NAV}_t}{\\max_{s \\le t}\\text{NAV}_s} - 1, \\quad \\text{MDD} = \\min_{t} \\text{DD}_t",
+    "formula_lines": [
+      "underwater(t) = NAV(t) / running_max(NAV, <= t) - 1",
+      "MDD = min_t underwater(t)  (同时监控最长水下修复天数)"
+    ],
+    "institutional_threshold": "须结合基准回撤、超额最大回撤与 Calmar 比率（>= 1.0）综合评估",
+    "common_pitfalls": [
+      "月频净值采样会大幅掩盖日内或月中的真实深回撤",
+      "只看绝对最大回撤而忽略相对基准的超额最大回撤，无法评估指数增强产品的客户赎回风险"
+    ],
+    "related_terms": ["excess_drawdown", "calmar", "regime_shift", "information_ratio"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（对象 {entity_id}）解读「{term}」：当前值 {value}，定位最大回撤发生区间、持续天数及当时的市场 Regime。"
+  },
+  {
+    "term_id": "calmar",
+    "term": "卡玛比率 (Calmar Ratio)",
+    "en_name": "Calmar Ratio",
+    "domain": "Q5",
+    "category": "backtest",
+    "aliases": ["calmar_max_drawdown", "calmar_ratio"],
+    "short_tip": "策略年化收益率除以绝对最大回撤幅度，直观衡量策略赚取收益与承受极端下跌痛苦的性价比。",
+    "formula_latex": "\\text{Calmar} = \\frac{R_{\\text{ann}}}{\\left|\\text{MDD}\\right|}",
+    "formula_lines": [
+      "Calmar = ann_return_pct / abs(max_drawdown_pct)",
+      "机构经验参考: >= 1.0（超额口径 Calmar 同样重要）"
+    ],
+    "institutional_threshold": "机构参考 Calmar >= 1.0（要求至少覆盖完整牛熊周期，避免短样本失真）",
+    "common_pitfalls": [
+      "在不足一年的单边牛市上算出的 Calmar 可能虚高达 5.0 以上，缺乏周期代表性",
+      "最大回撤接近 0 时 Calmar 趋于无穷大，需搭配波动率与夏普共同观察"
+    ],
+    "related_terms": ["max_drawdown", "excess_drawdown", "sharpe_is_oos", "information_ratio"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（对象 {entity_id}）解读「{term}」：当前值 {value}（参考：{institutional_threshold}），评估收益与极端回撤的平衡度。"
+  },
+  {
+    "term_id": "excess_drawdown",
+    "term": "超额最大回撤",
+    "en_name": "Relative Excess Maximum Drawdown",
+    "domain": "Q5",
+    "category": "backtest",
+    "aliases": ["excess_max_drawdown_pct", "relative_mdd", "alpha_drawdown"],
+    "short_tip": "策略相对基准的超额净值从高点到谷底的最大跌幅，是指数增强产品触及风控止损线与客户赎回的核心指标。",
+    "formula_latex": "\\text{ExNAV}_t = \\prod_{s=1}^{t} \\frac{1 + r_{p,s}}{1 + r_{b,s}}, \\quad \\text{ExMDD} = \\min_{t}\\!\\left(\\frac{\\text{ExNAV}_t}{\\max_{s \\le t}\\text{ExNAV}_s} - 1\\right)",
+    "formula_lines": [
+      "Excess_DD(t) = Excess_NAV(t) / running_max(Excess_NAV) - 1",
+      "常见诱因: 小盘微盘踩踏、拥挤因子集体反转、行业偏离踏空"
+    ],
+    "institutional_threshold": "指数增强策略建议超额最大回撤控制在跟踪误差的 1.0–1.5 倍以内",
+    "common_pitfalls": [
+      "大盘上涨时策略绝对净值创新高，掩盖了相对基准已经大幅跑输的超额回撤",
+      "把算术收益差直接累加当超额净值，长区间下与几何相对净值产生显著偏差"
+    ],
+    "related_terms": ["max_drawdown", "tracking_error", "crowding_index", "regime_shift"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（{universe_id}，对象 {entity_id}）解读「{term}」：当前值 {value}，剖析超额回撤阶段对应的风格/行业暴露与因子衰减原因。"
+  },
+  {
+    "term_id": "implementation_shortfall",
+    "term": "执行落差 (IS)",
+    "en_name": "Implementation Shortfall",
+    "domain": "Q6",
+    "category": "shadow",
+    "aliases": ["is_bps", "shadow_is_delta", "median_is_delta_bps", "total_is_bps"],
+    "short_tip": "理论决策组合（纸面收盘信号）与实际影子盘/实盘成交组合之间的总收益损耗，以基点（bps）衡量执行摩擦。",
+    "formula_latex": "\\text{IS} = R_{\\text{paper}} - R_{\\text{actual}} = \\text{Delay/Gap} + \\text{Impact} + \\text{Opportunity(Unfilled)} + \\text{Fees}",
+    "formula_lines": [
+      "IS_total = open_gap_bps + liquidity_impact_bps + limit_queue_bps + explicit_fees_bps",
+      "预警阈值: 窗口 IS <= 50 bps；配对 IS 漂移中位差 > 20 bps 触发告警"
+    ],
+    "institutional_threshold": "滚动窗口总 IS 建议 <= 50 bps，影子 vs 理论中位漂移差 <= 20 bps",
+    "common_pitfalls": [
+      "只盯已成交订单的滑点而忽略因涨停未买进造成的机会成本（Opportunity Cost），低估真实 IS",
+      "在缺乏真实成交日志时把零观测缺口误报成“0 bps 完美执行”"
+    ],
+    "related_terms": ["perold_is", "open_gap", "liquidity_impact", "limit_queue", "fill_rate"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（对象 {entity_id}）解读「{term}」：当前值 {value}（门槛：{institutional_threshold}），拆解跳空、冲击与排队损耗并给出执行改进建议。"
+  },
+  {
+    "term_id": "perold_is",
+    "term": "Perold 执行落差拆解",
+    "en_name": "Perold Implementation Shortfall Decomposition",
+    "domain": "Q6",
+    "category": "shadow",
+    "aliases": ["perold_decomposition", "is_attribution"],
+    "short_tip": "将总执行落差按 Andre Perold 会计恒等式拆解为开盘跳空延迟、流动性冲击、涨跌停未成交机会成本及显性税费。",
+    "formula_latex": "\\text{IS}_{\\text{Perold}} = \\underbrace{q_{\\text{fill}}(P_{\\text{open}} - P_{\\text{dec}})}_{\\text{Open Gap}} + \\underbrace{q_{\\text{fill}}(P_{\\text{exec}} - P_{\\text{open}})}_{\\text{Impact}} + \\underbrace{(q_{\\text{tgt}} - q_{\\text{fill}})(P_{\\text{end}} - P_{\\text{dec}})}_{\\text{Unfilled/Queue}} + \\text{Fees}",
+    "formula_lines": [
+      "Total_IS == Open_Gap + Liquidity_Impact + Limit_Queue + Explicit_Fees",
+      "守恒要求: 分项之和严格等于总 IS"
+    ],
+    "institutional_threshold": "四分项之和严格等于总 IS（零缺口），可比较订单覆盖率 >= 95%",
+    "common_pitfalls": [
+      "拆解各项时使用不同的基准参考价（如有的用前收、有的用 VWAP），破坏 Perold 恒等闭合",
+      "未成交机会成本在行情大涨时为巨额隐性亏损，忽略它会让执行团队盲目缩减下单量以美化滑点"
+    ],
+    "related_terms": ["implementation_shortfall", "open_gap", "liquidity_impact", "limit_queue", "conservation_law"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（对象 {entity_id}）解读「{term}」：当前拆解 {value}，识别最大执行漏损项并提出调度或算法交易优化方向。"
+  },
+  {
+    "term_id": "open_gap",
+    "term": "开盘跳空损耗",
+    "en_name": "Overnight Open Gap Cost",
+    "domain": "Q6",
+    "category": "shadow",
+    "aliases": ["gap_bps", "delay_cost", "overnight_gap"],
+    "short_tip": "日终收盘生成调仓信号到次日集合竞价开盘实际挂单之间，因隔夜消息与同类资金抢跑产生的价格跳空损耗。",
+    "formula_latex": "\\text{Gap}_{i,t} = \\text{side}_{i,t} \\cdot \\left(\\frac{P^{\\text{open}}_{i,t}}{P^{\\text{close}}_{i,t-1}} - 1\\right) \\times 10^4 \\text{ (bps)}",
+    "formula_lines": [
+      "Gap_bps = sign(trade) * (open_t / close_{t-1} - 1) * 10000",
+      "高跳空损耗常见于高度拥挤的短周期量价或舆情事件因子"
+    ],
+    "institutional_threshold": "纳入 Perold IS 严密监控；若跳空吞噬主要毛超额须降低短周期拥挤信号权重",
+    "common_pitfalls": [
+      "回测假设以信号日收盘价成交（而非次日开盘/VWAP），彻底漏掉了真实存在的开盘跳空成本",
+      "次日开盘集中市价抢筹放大集合竞价跳空，可通过盘中 TWAP/VWAP 拆单缓解"
+    ],
+    "related_terms": ["perold_is", "implementation_shortfall", "crowding_index", "ic_decay"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（对象 {entity_id}）解读「{term}」：当前值 {value} bps，判断是否存在信号拥挤抢跑并建议入场价格基准优化。"
+  },
+  {
+    "term_id": "liquidity_impact",
+    "term": "影子流动性冲击成本",
+    "en_name": "Shadow Liquidity & Market Impact Cost",
+    "domain": "Q6",
+    "category": "shadow",
+    "aliases": ["liquidity_bps", "execution_slippage"],
+    "short_tip": "影子盘实测成交均价相对决策参考开盘价的盘口冲击偏离，用于在线校验平方根冲击模型参数 Y 是否低估。",
+    "formula_latex": "\\text{LiqImpact}_{i,t} = \\text{side}_{i,t} \\cdot \\left(\\frac{P^{\\text{exec}}_{i,t}}{P^{\\text{open}}_{i,t}} - 1\\right) \\times 10^4 \\text{ (bps)}",
+    "formula_lines": [
+      "liquidity_bps = signed_fill_slippage_vs_open * 10000",
+      "持续高于回测预测冲击 -> 需上调 impact_coeff_y 并重测 AUM 容量上限"
+    ],
+    "institutional_threshold": "实测冲击应与回测模型匹配；持续超偏需触发参数重校准与降换手",
+    "common_pitfalls": [
+      "市场整体缩量期个股 ADV 腰斩，导致原有 PoV 参数下的实际冲击成倍上升",
+      "未按标的市值分层统计冲击，大盘股的低滑点掩盖了微盘股的剧烈盘口击穿"
+    ],
+    "related_terms": ["sqrt_impact", "perold_is", "pov", "capacity_frontier"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（对象 {entity_id}）解读「{term}」：当前值 {value} bps，对比回测模型预测值判断是否需要重校准冲击参数。"
+  },
+  {
+    "term_id": "limit_queue",
+    "term": "涨跌停排队与机会损耗",
+    "en_name": "Price-Limit Queue & Unfilled Opportunity Cost",
+    "domain": "Q6",
+    "category": "shadow",
+    "aliases": ["limit_queue_bps", "unfilled_cost", "limit_block_cost"],
+    "short_tip": "因涨停板买不进或跌停板卖不出导致目标仓位未能成交，由此错失的后续涨幅或被迫承受的继续下跌损失。",
+    "formula_latex": "\\text{QueueCost}_{i,t} = (w^{\\text{tgt}}_{i,t} - w^{\\text{fill}}_{i,t})\\,(r_{i, t \\to t+1}) \\times 10^4 \\text{ (bps)}",
+    "formula_lines": [
+      "limit_queue_bps = unfilled_weight * subsequent_return * 10000",
+      "A 股极端情绪期（连板/踩踏）的核心隐性风险来源"
+    ],
+    "institutional_threshold": "须独立计量并计入总 IS，严禁在回测或影子盘中静默忽略未成交订单",
+    "common_pitfalls": [
+      "把被涨跌停挡掉的订单直接丢弃当没发生，使账面滑点看似很低但实际跑输理论组合",
+      "动量类与微盘类策略在涨停潮/跌停潮中排队损耗会骤增，必须事前用事件回测压力测试"
+    ],
+    "related_terms": ["price_limit_rules", "fill_rate", "perold_is", "implementation_shortfall"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（对象 {entity_id}）解读「{term}」：当前损耗 {value} bps，分析高拒单标的分布及风控过滤建议。"
+  },
+  {
+    "term_id": "fill_rate",
+    "term": "影子成交率",
+    "en_name": "Shadow Execution Fill Rate",
+    "domain": "Q6",
+    "category": "shadow",
+    "aliases": ["fill_rate_pct", "fill_rate_gap", "completion_rate"],
+    "short_tip": "实际可成交名义金额占目标调仓名义金额的百分比，反映组合受涨跌停、停牌与 PoV 限制后的真实可执行程度。",
+    "formula_latex": "\\text{FillRate} = \\frac{\\sum_i \\left|\\text{Notional}^{\\text{filled}}_i\\right|}{\\sum_i \\left|\\text{Notional}^{\\text{target}}_i\\right|} \\times 100\\%",
+    "formula_lines": [
+      "fill_rate_pct = executed_notional / target_notional * 100%",
+      "机构红线: >= 95%（低于 95% 将导致组合偏离目标权重并放大追踪误差）"
+    ],
+    "institutional_threshold": "可比较证据覆盖与影子成交率建议 >= 95%（< 95% 触发执行告警）",
+    "common_pitfalls": [
+      "按订单笔数算成交率而非按名义金额加权，小额全成掩盖大额瓶颈标的未成",
+      "AUM 超过流动性容量后成交率断崖下跌，导致组合被动偏离优化目标权重"
+    ],
+    "related_terms": ["pov", "limit_queue", "implementation_shortfall", "capacity_frontier"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（对象 {entity_id}）解读「{term}」：当前值 {value}（门槛：{institutional_threshold}），定位拉低成交率的停牌/涨跌停/PoV 瓶颈标的。"
+  },
+  {
+    "term_id": "crowding_index",
+    "term": "因子拥挤度指数",
+    "en_name": "Factor Crowding Index",
+    "domain": "Q6",
+    "category": "shadow",
+    "aliases": ["crowding", "alpha_crowding"],
+    "short_tip": "度量市场同类量化资金在相同因子或头部标的上的持仓重叠与拥挤程度，高拥挤往往预示踩踏反转风险。",
+    "formula_latex": "\\text{Crowding}_t = \\operatorname{Overlap}\\!\\left(\\text{TopDecile}(f_t),\\; \\text{LibraryPeers}_t\\right) \\in [0, 1]",
+    "formula_lines": [
+      "crowding_index in [0, 1]（综合头部标的重合度、换手放大与估值价差）",
+      "警戒红线: <= 0.80（> 0.80 需降权防踩踏）"
+    ],
+    "institutional_threshold": "建议 crowding_index <= 0.80；突破 0.80 须启动减仓或派发正交替代因子复研",
+    "common_pitfalls": [
+      "高拥挤因子在资金持续流入期往往呈现虚假高 IC，一旦资金撤离就会发生 2024 年微盘踩踏式闪崩",
+      "仅凭库内 Top-Decile 重合度做代理时，需结合市场成交占比与波动率交叉印证"
+    ],
+    "related_terms": ["max_corr_library", "kill_switch", "open_gap", "excess_drawdown"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（{universe_id}，对象 {entity_id}）解读「{term}」：当前值 {value}（门槛：{institutional_threshold}），评估因子踩踏风险与降拥挤方案。"
+  },
+  {
+    "term_id": "hist_percentile",
+    "term": "历史分位监控",
+    "en_name": "Rolling Metric Historical Percentile",
+    "domain": "Q6",
+    "category": "shadow",
+    "aliases": ["ic_percentile", "decay_percentile"],
+    "short_tip": "当前滚动 60 日 RankIC 或超额表现位于该因子自身历史分布中的百分位，用于客观识别结构性衰减。",
+    "formula_latex": "p_t = \\frac{1}{T_{\\text{hist}}}\\sum_{s < t} \\mathbf{1}\\!\\left(\\text{IC}_{60,s} \\le \\text{IC}_{60,t}\\right) \\times 100\\%",
+    "formula_lines": [
+      "hist_percentile = empirical_CDF(rolling_60d_IC_today | strictly_past_history)",
+      "衰减警戒线: < 20% 分位进入 DEGRADING 观察并触发复研评估"
+    ],
+    "institutional_threshold": "滚动 60D IC 历史分位建议 >= 20%；持续跌破 20% 触发 DEGRADING 预警",
+    "common_pitfalls": [
+      "计算历史分位时混入未来数据或重叠窗口样本太短，导致分位点频繁误报警",
+      "把正常周期性风格逆风与永久性因子失效混为一谈，必须结合 5 维 Regime 基线区分"
+    ],
+    "related_terms": ["kill_switch", "regime_shift", "rank_ic", "regime_classification"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（对象 {entity_id}）解读「{term}」：当前分位 {value}（门槛：{institutional_threshold}），区分此次回落是短暂 Regime 逆风还是结构性失效。"
+  },
+  {
+    "term_id": "kill_switch",
+    "term": "衰减熔断开关 (Kill-Switch)",
+    "en_name": "Factor Decay & Drift Kill-Switch",
+    "domain": "Q6",
+    "category": "shadow",
+    "aliases": ["rolling_ic_decay_killswitch", "degrading", "risk_kill_switch"],
+    "short_tip": "当因子滚动 IC 持续恶化、拥挤度爆表或影子执行落差越界时，自动切换至 DEGRADING/KILL-SWITCH 并阻断信号导出。",
+    "formula_latex": "\\text{State} = \\begin{cases} \\text{KILL-SWITCH}, & \\text{IC}_{60} < 0 \\;\\vee\\; \\text{IS}_{\\Delta} > \\tau_{\\text{kill}} \\\\ \\text{DEGRADING}, & p_{\\text{hist}} < 20\\% \\;\\vee\\; \\text{Crowding} > 0.80 \\\\ \\text{ACTIVE}, & \\text{otherwise} \\end{cases}",
+    "formula_lines": [
+      "ACTIVE -> DEGRADING (预警并派发集群复研) -> KILL-SWITCH (物理阻断导出)",
+      "触发 KILL-SWITCH 后须人工审计并重新通过形式化证明方可解封"
+    ],
+    "institutional_threshold": "risk_state 为 alert/kill/unknown 时强制禁止只读信号签核导出",
+    "common_pitfalls": [
+      "触发熔断后未经根因诊断直接人工调宽阈值强行恢复，引发二次重大亏损",
+      "熔断阈值设得过窄导致正常波动期频繁停机错失修复行情"
+    ],
+    "related_terms": ["hist_percentile", "crowding_index", "authority_gate", "implementation_shortfall"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（对象 {entity_id}）解读「{term}」状态 {value}（规范：{institutional_threshold}），判断是否应立即派发集群 V2 复研课题替代该衰减因子。"
+  },
+  {
+    "term_id": "authority_gate",
+    "term": "只读权限闸门 (Authority Gate)",
+    "en_name": "Read-Only Research Authority Gate Manifest",
+    "domain": "Q6",
+    "category": "shadow",
+    "aliases": ["authority_gate_manifest", "signal_only", "broker_connected"],
+    "short_tip": "QuantLab Pro 的物理安全红线：研究系统绝不直连券商或发送交易指令，仅在风控与证据全通过时签发带 SHA-256 指纹的只读信号清单。",
+    "formula_latex": "\\text{execution\\_mode} \\equiv \\text{READ\\_ONLY\\_SIGNAL\\_EXPORT\\_ONLY}, \\quad \\text{broker\\_connected} \\equiv \\text{False}",
+    "formula_lines": [
+      "硬不变量: broker_connected == False（无任何券商 SDK、凭证或下单路由）",
+      "签发条件: risk_passed == True AND snapshot_fresh AND manifest_sha256 verified"
+    ],
+    "institutional_threshold": "broker_connected 恒为 False；仅当风控全通过时方可导出只读调仓建议清单",
+    "common_pitfalls": [
+      "在研究沙箱或 MCP 工具中混入券商密钥或交易路由，造成 Agent 误触发实盘资金风险",
+      "绕过风险闸门将未通过形式化证明或数据过期的信号直接交付下游"
+    ],
+    "related_terms": ["kill_switch", "fact_fingerprint", "freshness", "conservation_law"],
+    "bot_prompt_template": "请结合快照 {snapshot_id} 核验「{term}」状态 {value}（红线：{institutional_threshold}），确认当前研究清单满足物理零下单与风控签核要求。"
+  },
+  {
+    "term_id": "regime_shift",
+    "term": "市场状态切换 (Regime Shift)",
+    "en_name": "Market Regime Shift & Structural Break",
+    "domain": "Q6",
+    "category": "shadow",
+    "aliases": ["regime_shift_monitoring", "structural_break"],
+    "short_tip": "市场在趋势（牛/熊/震荡）、波动率或大小盘风格之间发生结构性切换，常导致单一环境训练的因子突然失效。",
+    "formula_latex": "\\mathbb{E}[\\text{IC}_t \\mid S_t = s_1] \\neq \\mathbb{E}[\\text{IC}_t \\mid S_t = s_2]",
+    "formula_lines": [
+      "跨 Regime 监控: 牛/熊/震荡 × 低/中/高波 × 大/中/小盘 × 申万行业 × Barra 风格",
+      "应对策略: 多维度基线对照 + 单维依赖红旗 (<= 60%)"
+    ],
+    "institutional_threshold": "跨 Regime 保持正期望且无单桶正向贡献 > 60%（INSTITUTIONAL_GATES.single_dim_dominance_max）",
+    "common_pitfalls": [
+      "仅在 2021–2023 小盘震荡市里验证通过的因子，一遇到大盘蓝筹急升或流动性危机即全线失效",
+      "用事后肉眼划定的日期段做 Regime 标签，违背因果划分原则"
+    ],
+    "related_terms": ["regime_classification", "dimension_dependence", "hist_percentile", "walk_forward"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（{universe_id}，对象 {entity_id}）解读「{term}」表现：{value}（要求：{institutional_threshold}），识别当前市场所处 Regime 及策略脆弱象限。"
+  },
+  {
+    "term_id": "newey_west_hac",
+    "term": "Newey-West HAC 稳健方差",
+    "en_name": "Newey-West Heteroskedasticity & Autocorrelation Consistent Variance",
+    "domain": "MATH",
+    "category": "math",
+    "aliases": ["hac", "bartlett_kernel", "nw_hac"],
+    "short_tip": "采用 Bartlett 三角核对时间序列的滞后自协方差加权求和，在存在序列自相关与异方差时仍能给出一致的标准误估计。",
+    "formula_latex": "\\widehat{\\Omega}_{\\text{NW}} = \\hat{\\gamma}_0 + 2\\sum_{\\ell=1}^{L} \\left(1 - \\frac{\\ell}{L+1}\\right)\\hat{\\gamma}_{\\ell}, \\quad L = \\lfloor 4(T/100)^{2/9} \\rfloor",
+    "formula_lines": [
+      "Bartlett 核权重 w(l) = 1 - l / (L + 1), 保证方差估计非负",
+      "默认滞后阶数 L = floor(4 * (T / 100)^(2/9)) 或 >= 预测期 h - 1"
+    ],
+    "institutional_threshold": "滞后阶数 L = max(floor(4*(T/100)^(2/9)), h-1)，搭配 |NW t| >= 3.00 门禁",
+    "common_pitfalls": [
+      "滞后阶数 L 选得小于多日收益重叠期 h-1，未能彻底消除重叠标签自相关",
+      "样本量 T 过小时 Bartlett 核有限样本偏差增大，应与 Stationary Block Bootstrap 互相印证"
+    ],
+    "related_terms": ["nw_t_stat", "bootstrap_ci", "rank_ic", "icir"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（对象 {entity_id}）解读「{term}」：当前值 {value}（规范：{institutional_threshold}），说明自相关结构对统计显著性的校正幅度。"
+  },
+  {
+    "term_id": "bootstrap_ci",
+    "term": "平稳块自助法 95% 置信区间",
+    "en_name": "Politis-Romano Stationary Block Bootstrap 95% CI",
+    "domain": "MATH",
+    "category": "math",
+    "aliases": ["block_bootstrap", "stationary_bootstrap", "rank_ic_ci95", "ci95"],
+    "short_tip": "按几何分布随机块长对时间序列做 B 次有放回块重抽样，在保留自相关结构下构造 RankIC/ICIR/多空收益的 95% 置信区间。",
+    "formula_latex": "\\text{CI}_{95\\%}(\\hat{\\theta}) = \\left[\\hat{\\theta}^*_{(0.025 B)},\\; \\hat{\\theta}^*_{(0.975 B)}\\right], \\quad \\bar{\\ell} = \\max\\!\\left(h,\\; \\lceil T^{1/3} \\rceil\\right)",
+    "formula_lines": [
+      "期望块长 l_bar = max(horizon, ceil(T^(1/3)))，默认 B >= 500（机构深度验证 B=1000–2000）",
+      "判定标准: 95% CI 下界 > 0（不跨零），且固定随机种子确保可复现"
+    ],
+    "institutional_threshold": "RankIC / 多空收益 95% 置信区间下界 > 0（不跨零），期望块长 >= 预测期 h",
+    "common_pitfalls": [
+      "使用普通逐日 i.i.d. Bootstrap 打碎时间序列自相关，会系统性把置信区间算窄",
+      "不固定随机种子导致每次刷新页面置信区间边界来回跳动，破坏证据复现性"
+    ],
+    "related_terms": ["newey_west_hac", "rank_ic", "long_short", "bh_fdr"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（{universe_id}，对象 {entity_id}）解读「{term}」：当前区间 {value}（门槛：{institutional_threshold}），判断点估计是否统计稳健而非随机噪声。"
+  },
+  {
+    "term_id": "bh_fdr",
+    "term": "BH-FDR 多重检验校正",
+    "en_name": "Benjamini-Hochberg False Discovery Rate & Hansen SPA",
+    "domain": "MATH",
+    "category": "math",
+    "aliases": ["fdr", "fdr_q_value", "bh_fdr_q_max", "spa_p_value", "hansen_spa"],
+    "short_tip": "当在同家族中并行检验 M 个因子或策略时，将原始 p 值按序校正为错误发现率 q 值（并可对照 Hansen SPA），严防挑赢家偏差。",
+    "formula_latex": "p_{(k)} \\le \\frac{k}{M}\\alpha, \\quad q_{(k)} = \\min_{j \\ge k}\\left(\\min\\!\\left(1,\\; \\frac{M}{j} p_{(j)}\\right)\\right)",
+    "formula_lines": [
+      "BH q-value <= 0.05 (INSTITUTIONAL_GATES.bh_fdr_q_max, WARN: 0.05 - 0.10)",
+      "Hansen SPA p-value <= 0.05 (INSTITUTIONAL_GATES.spa_p_max, WARN: 0.05 - 0.10)"
+    ],
+    "institutional_threshold": "正式入库 BH-FDR q <= 0.05 且 SPA p <= 0.05（0.05–0.10 为 WARN）；M 须含淘汰试验",
+    "common_pitfalls": [
+      "只把通过初筛的 3 个因子拿来做 BH-FDR，漏掉前面失败的 50 次尝试，使 q 值严重失真",
+      "在高度正负相关的候选之间未核查 Benjamini-Yekutieli (BY) 保守敏感性界"
+    ],
+    "related_terms": ["dsr", "trial_count_m", "pbo", "nw_t_stat", "bootstrap_ci"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（对象 {entity_id}）解读「{term}」：当前 q/p 值 {value}（试验数 M={trial_count_m}，门槛：{institutional_threshold}），评估多重检验后的真发现置信度。"
+  },
+  {
+    "term_id": "prefix_invariance",
+    "term": "因果前缀不变性证明",
+    "en_name": "Causal Prefix-Invariance Formal Proof",
+    "domain": "MATH",
+    "category": "math",
+    "aliases": ["prefix_invariance_proof", "max_prefix_drift", "zero_lookahead_proof"],
+    "short_tip": "在多个历史截断点 τ 截断未来数据后完整重算预处理与因子信号，数学证明历史任意时刻信号与全量计算绝对一致（零前视）。",
+    "formula_latex": "\\forall\\, \\tau \\in \\{0.45T, 0.65T, 0.85T\\}:\\; \\max_{i,\\, t \\le \\tau} \\left| f(\\mathcal{D}_{\\le \\tau})_{i,t} - f(\\mathcal{D}_{\\le T})_{i,t} \\right| \\le 10^{-10}",
+    "formula_lines": [
+      "截断点默认 [0.45T, 0.65T, 0.85T]；从原始 PIT bars 重跑全套预处理与因子计算",
+      "Hard Gate (INSTITUTIONAL_GATES.prefix_invariance_tol): max_drift <= 1e-10 且 NaN 掩码完全一致"
+    ],
+    "institutional_threshold": "硬门禁 max_prefix_drift <= 1e-10 且空值掩码 100% 一致；违背立即判 FALSIFIED",
+    "common_pitfalls": [
+      "仅检查 AST 表达式未拦截隐蔽在外部预处理脚本中的全样本均值/PCA/未来退市过滤，必须用前缀重算抓现行",
+      "只在单个截断点测试可能错过位于后半段数据中的条件分支泄漏"
+    ],
+    "related_terms": ["look_ahead_bias", "ast_causal_proof", "point_in_time", "conservation_law"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（对象 {entity_id}）解读「{term}」结果：最大前缀漂移 {value}（红线：{institutional_threshold}）。若失败请指出造成时间泄漏的具体算子或预处理环节。"
+  },
+  {
+    "term_id": "ast_causal_proof",
+    "term": "AST 因果依赖图证明",
+    "en_name": "Abstract Syntax Tree Causality Proof",
+    "domain": "MATH",
+    "category": "math",
+    "aliases": ["ast_causality", "causal_dag_proof", "t1_ast_causal"],
+    "short_tip": "形式化遍历因子表达式抽象语法树，验证每个字段与时间算子仅引用当前及过去信息（下标 <= t），从源头证明因果合法性。",
+    "formula_latex": "\\forall\\, v \\in \\text{AST}(e):\\; \\text{time\\_offset}(v) \\le 0 \\;\\wedge\\; \\text{scope}(v) \\in \\{\\text{security\\_past},\\; \\text{same\\_date\\_cs}\\}",
+    "formula_lines": [
+      "T1.AST_CAUSAL: 逐节点验证字段白名单、算子白名单、时序滞后 >= 0、center == False",
+      "Hard Gate: 违规节点 == 0（任意违规直接阻断并入墓碑库）"
+    ],
+    "institutional_threshold": "硬门禁：AST 违规节点 = 0（AST_UNSAFE 直接判 FALSIFIED，不可覆盖）",
+    "common_pitfalls": [
+      "只验静态 AST 而不验动态前缀不变性，无法覆盖外挂 Python 脚本中的数据泄漏",
+      "忽略 over() 分组作用域，把时序滚动算子误施加到截面维度造成跨股票串扰"
+    ],
+    "related_terms": ["ast_safe", "prefix_invariance", "look_ahead_bias"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（对象 {entity_id}）解读「{term}」：当前证明状态 {value}（红线：{institutional_threshold}），说明表达式的因果时间依赖是否严格闭合。"
+  },
+  {
+    "term_id": "conservation_law",
+    "term": "会计与风险守恒律",
+    "en_name": "Accounting, Weight & Attribution Conservation Invariants",
+    "domain": "MATH",
+    "category": "math",
+    "aliases": ["invariants", "conservation_invariants", "t3_conservation_psd"],
+    "short_tip": "组合权重单纯形、现金与持仓市值、摩擦扣减、Brinson/Barra 归因及协方差 PSD 五大恒等式必须在容差内严格闭合。",
+    "formula_latex": "\\left|\\sum w_i - 1\\right| \\le 10^{-6}, \\quad \\left|\\text{NAV} - (\\text{Cash} + \\sum q_i P_i)\\right| \\le 10^{-8}, \\quad \\lambda_{\\min}(\\Sigma) \\ge -10^{-10}, \\quad |\\varepsilon_{\\text{attr}}| \\le 1\\text{ bp}",
+    "formula_lines": [
+      "权重守恒: |sum(w) - 1| <= 1e-6 | 行业主动和: |sum(Δw_ind)| <= 1e-6",
+      "现金/摩擦/归因闭合 <= 1.0 bp | 协方差 PSD λmin >= -1e-10"
+    ],
+    "institutional_threshold": "5 项守恒律全部 PASS（权重 <= 1e-6、归因闭合 <= 1.0 bp、PSD >= -1e-10）",
+    "common_pitfalls": [
+      "回测中送股分红现金未入账或卖空穿仓导致现金守恒破坏，账面净值悄悄多出凭空收益",
+      "优化后权重截断重归一打破了原本满足的行业或风格约束"
+    ],
+    "related_terms": ["closure_error", "psd", "solve_status", "t_plus_1", "fact_fingerprint"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（对象 {entity_id}）核查「{term}」各项守恒徽章：{value}（红线：{institutional_threshold}），排查任意一项守恒违背的底层账务根因。"
+  },
+  {
+    "term_id": "param_cliff",
+    "term": "参数敏感性悬崖检验",
+    "en_name": "Parameter Sensitivity Cliff Test",
+    "domain": "MATH",
+    "category": "math",
+    "aliases": ["cliff_test", "param_sensitivity", "max_param_cliff_drop_pct"],
+    "short_tip": "对表达式窗口或关键超参数施加 ±10%/±20% 邻域微扰并重评，检验性能是否“挪一格就断崖崩塌”（针尖过拟合）。",
+    "formula_latex": "\\text{Drop}_{\\max} = \\max_{\\theta' \\in \\mathcal{N}_{\\pm 20\\%}(\\theta^*)} \\frac{S(\\theta^*) - S(\\theta')}{\\max(|S(\\theta^*)|,\\; \\epsilon)}",
+    "formula_lines": [
+      "对窗口参数做 {-20%, -10%, +10%, +20%} 扰动重算核心 ICIR / OOS Sharpe",
+      "Hard Gate (INSTITUTIONAL_GATES.param_cliff_drop_max): 邻点最大衰减 <= 30% (WARN: 30% - 50%, > 50% FAIL)"
+    ],
+    "institutional_threshold": "邻点最大衰减 <= 30%（INSTITUTIONAL_GATES.param_cliff_drop_max）；30%–50% WARN；> 50% 判悬崖失败",
+    "common_pitfalls": [
+      "网格搜索中恰好挑中某个孤立尖峰参数（如 window=17 极佳而 15 和 19 全崩），样本外必然失效",
+      "只做单侧扰动而未覆盖双侧邻域，遗漏不对称悬崖风险"
+    ],
+    "related_terms": ["pbo", "dsr", "trial_count_m", "oos_is_ratio"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（对象 {entity_id}）解读「{term}」：当前邻点最大衰减 {value}（门槛：{institutional_threshold}），判断策略是否落入针尖过拟合区间并建议多窗口集成。"
+  },
+  {
+    "term_id": "regime_classification",
+    "term": "因果 5 维市场 Regime 划分",
+    "en_name": "Strictly Causal 5-Dimension Market Regime Classification",
+    "domain": "MATH",
+    "category": "math",
+    "aliases": ["dimension_baselines", "market_regime", "volatility_regime", "rcs"],
+    "short_tip": "基于冻结快照以严格无前视规则构建 5 大维度基线（市场牛熊震荡、波动率分位、市值分层、申万行业、Barra 风格），供全部研究统一对照。",
+    "formula_latex": "S_t = \\mathcal{C}(\\mathcal{D}_{\\le t}) \\in \\{\\text{BULL}, \\text{BEAR}, \\text{SIDEWAYS}\\} \\times \\{\\text{LOW}, \\text{MID}, \\text{HIGH}\\} \\times \\dots",
+    "formula_lines": [
+      "Market Regime: 60D 趋势与 120D 回撤因果状态机 (BULL/BEAR/SIDEWAYS)",
+      "Vol Regime: 20D 实现波动率严格历史扩展分位 (P33/P67) | Cap/Industry/Style 每日截面切分"
+    ],
+    "institutional_threshold": "所有 5 维基线严格因果、与 snapshot_id 哈希绑定复用，零未来分位泄漏",
+    "common_pitfalls": [
+      "用全样本波动率分位数划分高低波 Regime，把未来高波期信息泄漏到历史标签中",
+      "每个研究临时手写不同口径的牛熊定义，导致跨研究无法横向对比"
+    ],
+    "related_terms": ["dimension_dependence", "regime_shift", "prefix_invariance", "fact_fingerprint"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（{universe_id}，对象 {entity_id}）解读「{term}」与当前 5 维基线对照：{value}，评估策略在不同市场环境下的稳健性。"
+  },
+  {
+    "term_id": "dimension_dependence",
+    "term": "单维依赖度与贡献红旗",
+    "en_name": "Single-Dimension Dominance & Contribution Share",
+    "domain": "MATH",
+    "category": "math",
+    "aliases": ["single_dim_dominance", "single_dim_dominance_max", "dim_flag"],
+    "short_tip": "衡量策略总正向超额收益中来自单一 Regime、波动率层、市值层或行业桶的最大占比，识破“偏科型伪全天候”策略。",
+    "formula_latex": "\\text{Dom}_d = \\max_{b \\in \\mathcal{B}_d} \\frac{\\max(0,\\; \\text{Contrib}_{d,b})}{\\sum_{b' \\in \\mathcal{B}_d} \\max(0,\\; \\text{Contrib}_{d,b'})}",
+    "formula_lines": [
+      "single_dim_dominance = max_bucket(positive_contribution) / total_positive_contribution",
+      "Hard Gate (INSTITUTIONAL_GATES.single_dim_dominance_max): <= 60% (WARN: 50% - 60%)"
+    ],
+    "institutional_threshold": "单桶正向贡献占比 <= 60%（INSTITUTIONAL_GATES.single_dim_dominance_max）；> 60% 触发 DIM FLAG 告警",
+    "common_pitfalls": [
+      "全样本年化超额亮眼，拆开一看 75% 利润来自微盘层或某次牛市暴涨，换个环境毫无超额",
+      "只看各桶年化收益而不乘样本天数占比，高估样本极少小桶的真实利润贡献"
+    ],
+    "related_terms": ["regime_classification", "regime_shift", "size_neutral", "barra_attribution"],
+    "bot_prompt_template": "请结合快照 {snapshot_id}（{universe_id}，对象 {entity_id}）解读「{term}」：当前最大单桶占比 {value}（红线：{institutional_threshold}）。若触发单维依赖告警，请给出中性化或分环境改进的 V2 子研究方案。"
+  }
+]

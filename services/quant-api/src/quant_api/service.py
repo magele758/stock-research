@@ -4,25 +4,34 @@ Every function pins its result to a concrete `snapshot_id`, calls the real
 `quant_core` lake/engines (never synthesises prices) and raises
 `deps.ServiceUnavailable | NotFound | InvalidArgument` for expected failures.
 There is deliberately NO order/broker function in this module.
+
+V3.0 modules (`quant_core.glossary`, `validation.formal`, `factors.regime`, `risk.capacity`,
+`quant_api.orchestrator`) are imported lazily inside functions so V2.0 keeps working without them.
 """
 
 from __future__ import annotations
 
 import hashlib
+import importlib
+import inspect
 import json
 import os
 import re
+from collections.abc import Iterator
 from datetime import UTC, date, datetime, time, timedelta
 from typing import Any
 
 import numpy as np
 import polars as pl
+from pydantic import BaseModel
 from quant_core.schemas import (
     AsyncJobRecord,
     BacktestRequest,
     BacktestResult,
     BarraExposureRequest,
     BarraExposureResult,
+    CapacityAnalysisRequest,
+    CapacityFrontierResult,
     CpcvRequest,
     CpcvResult,
     DataHealthReport,
@@ -34,8 +43,18 @@ from quant_core.schemas import (
     FactorEvalResult,
     FactorHypothesisRequest,
     FactorHypothesisResult,
+    FormalProofResult,
+    FormalVerifyRequest,
+    GlossaryListResponse,
+    GlossaryTerm,
     PortfolioOptRequest,
     PortfolioOptResult,
+    PublishFindingRequest,
+    RegimeAnalysisRequest,
+    RegimeAnalysisResult,
+    ResearchDispatchRequest,
+    ResearchDispatchResponse,
+    ResearchStudyDetail,
     ShadowDriftRequest,
     ShadowDriftResult,
 )
@@ -822,3 +841,372 @@ def mcp_catalog() -> dict[str, Any]:
         "count": len(tools),
         "tools": tools,
     }
+
+
+# ===========================================================================
+# V3.0 institutional additions (lazy-imported engines; read-only, no trading surface)
+# ===========================================================================
+
+
+def _lazy(module: str, owner: str, code: str = "DATA_STALE") -> Any:
+    try:
+        return importlib.import_module(module)
+    except ImportError as exc:
+        raise ServiceUnavailable(f"{module} is not importable yet ({exc}). {owner} output is required.", code=code) from exc
+
+
+def _orch() -> Any:
+    return _lazy("quant_api.orchestrator", "v3-cluster-ledger", "CLUSTER_UNAVAILABLE").get_orchestrator()
+
+
+def _coerce(cls: type[BaseModel], value: Any) -> Any:
+    if isinstance(value, cls):
+        return value
+    if isinstance(value, BaseModel):
+        value = json.loads(value.model_dump_json())
+    return cls.model_validate(value)
+
+
+def dump(value: Any) -> Any:
+    """Recursively convert pydantic models to JSON-safe python values."""
+    if isinstance(value, BaseModel):
+        return json.loads(value.model_dump_json())
+    if isinstance(value, dict):
+        return {k: dump(v) for k, v in value.items()}
+    if isinstance(value, list | tuple):
+        return [dump(v) for v in value]
+    return value
+
+
+def _snapshot_or_none(snapshot_id: str | None = None) -> DatasetSnapshot | None:
+    try:
+        return deps.require_snapshot(snapshot_id)
+    except (ServiceUnavailable, NotFound):
+        return None
+
+
+def _prepare_factor_req(req: Any) -> Any:
+    """Resolve builtin / registered factor ids (or an experiment id) to a concrete (factor_id, expression)."""
+    fe = deps.engine("factors")
+    builtin = getattr(fe, "BUILTIN_FACTORS", {})
+    factor_id = getattr(req, "factor_id", None)
+    expression = getattr(req, "expression", None)
+    experiment_id = getattr(req, "experiment_id", None)
+    if expression is None and factor_id is None and experiment_id:
+        factor_id = _experiment_factors(experiment_id)[0][0]
+        req = req.model_copy(update={"factor_id": factor_id})
+    if expression is None and factor_id is None:
+        raise InvalidArgument("provide factor_id, expression or experiment_id")
+    if expression is None and factor_id not in builtin:
+        expr = _resolve_expression(factor_id)
+        if expr is None:
+            raise NotFound(f"factor {factor_id!r} is neither builtin nor a registered hypothesis")
+        req = req.model_copy(update={"expression": expr})
+    return req
+
+
+# --- glossary (no snapshot / lake dependency) --------------------------------------------------
+
+
+def glossary_list(category: str | None = None, domain: str | None = None, q: str | None = None) -> GlossaryListResponse:
+    g = _lazy("quant_core.glossary", "v3-cluster-ledger")
+    out = g.list_terms(category=category, domain=domain, q=q)
+    if isinstance(out, GlossaryListResponse):
+        return out
+    if isinstance(out, dict) and "terms" in out:
+        out = out["terms"]
+    terms = [_coerce(GlossaryTerm, t) for t in out]
+    return GlossaryListResponse(count=len(terms), categories=sorted({t.category.value for t in terms}), terms=terms)
+
+
+def glossary_get(term_id: str) -> GlossaryTerm:
+    g = _lazy("quant_core.glossary", "v3-cluster-ledger")
+    try:
+        term = g.get_term(term_id)
+    except (KeyError, LookupError) as exc:
+        raise NotFound(f"glossary term {term_id!r} not found") from exc
+    if term is None:
+        raise NotFound(f"glossary term {term_id!r} not found")
+    return _coerce(GlossaryTerm, term)
+
+
+def glossary_prompt(term_id: str, context: dict[str, Any] | None = None) -> str:
+    g = _lazy("quant_core.glossary", "v3-cluster-ledger")
+    try:
+        return str(g.render_bot_prompt(term_id, context=context))
+    except (KeyError, LookupError) as exc:
+        raise NotFound(f"glossary term {term_id!r} not found") from exc
+
+
+# --- formal verification / regime / capacity -----------------------------------------------------
+
+
+def _formal_candidate_kwargs(
+    fm: Any, req: FormalVerifyRequest, snap: DatasetSnapshot, registered_or_builtin: bool, progress: ProgressFn | None
+) -> dict[str, Any]:
+    """Best-effort CPCV candidate matrix (library series) so the T4 strategy proofs can actually run.
+
+    Only for builtin / registered factors or experiments: an ad-hoc expression has no library series, so its
+    strategy proofs honestly stay `insufficient` instead of being scored on a different candidate.
+    """
+    if not (req.run_cpcv and registered_or_builtin):
+        return {}
+    if "candidate_matrix" not in inspect.signature(fm.run_formal_verification).parameters:
+        return {}
+    target = req.experiment_id or req.factor_id
+    try:
+        _, matrix, base, _ = candidate_returns(target or "", req.universe_id, snap, req.trial_count_m, progress)
+    except (NotFound, ServiceUnavailable, InvalidArgument):
+        return {}
+    return {"candidate_matrix": matrix, "benchmark_returns": base}
+
+
+def formal_verify(req: FormalVerifyRequest, progress: ProgressFn | None = None) -> FormalProofResult:
+    req, snap = _pin(req)
+    ad_hoc = req.expression is not None
+    req = _prepare_factor_req(req)
+    fm = _lazy("quant_core.validation.formal", "v3-formal-engine")
+    if progress:
+        progress(10)
+    bars = _load_bars(req.universe_id, snap, None, None)
+    pit = _pit_financials(snap, _snapshot_end(snap))
+    extra = _formal_candidate_kwargs(fm, req, snap, not ad_hoc, progress)
+    try:
+        raw = fm.run_formal_verification(bars, req, financials_df=pit, **extra)
+    except ValueError:
+        if not extra:
+            raise
+        raw = fm.run_formal_verification(bars, req, financials_df=pit)  # matrix rejected: fall back to no candidate
+    res = _coerce(FormalProofResult, raw)
+    if res.artifact_uri is None:
+        uri = _save_artifact(f"formal_{res.verification_id}", "formal_proof", json.loads(res.model_dump_json()))
+        if uri:
+            res = res.model_copy(update={"artifact_uri": uri})
+    return res
+
+
+def formal_job_summary(res: FormalProofResult) -> dict[str, Any]:
+    return {
+        "verification_id": res.verification_id,
+        "target_id": res.target_id,
+        "passed": res.passed,
+        "verdict": res.verdict.value,
+        "proofs_passed": res.proofs_passed,
+        "proofs_total": res.proofs_total,
+        "max_prefix_drift": res.max_prefix_drift,
+        "bootstrap_rank_ic_ci95": res.bootstrap_rank_ic_ci95,
+        "bh_fdr_q_value": res.bh_fdr_q_value,
+        "spa_p_value": res.spa_p_value,
+        "max_param_cliff_drop_pct": res.max_param_cliff_drop_pct,
+        "blocking_failures": res.blocking_failures[:8],
+        "checks": [{"id": c.check_id, "status": c.status, "code": c.reason_code} for c in res.checks[:16]],
+        "proof_sha256": res.proof_sha256,
+    }
+
+
+def enqueue_formal_verify(req: FormalVerifyRequest, idempotency_key: str | None = None, dedupe: bool = True) -> AsyncJobRecord:
+    req, snap = _pin(req)
+    req = _prepare_factor_req(req)  # unknown factor -> 404 now, not an opaque failed job
+    key = idempotency_key or (_job_key("formal_verify", req, snap.snapshot_id) if dedupe else None)
+
+    def work(progress: ProgressFn) -> dict[str, Any]:
+        res = formal_verify(req, progress)
+        return {"summary": formal_job_summary(res), "artifact_uri": res.artifact_uri}
+
+    return get_manager().submit("formal_verify", snap.snapshot_id, work, idempotency_key=key)
+
+
+def regime_analysis(req: RegimeAnalysisRequest) -> RegimeAnalysisResult:
+    req, snap = _pin(req)
+    req = _prepare_factor_req(req)
+    rg = _lazy("quant_core.factors.regime", "v3-formal-engine")
+    bars = _load_bars(req.universe_id, snap, None, None)
+    baselines = rg.build_dimension_baselines(bars, snap.snapshot_id, req.universe_id)
+    res = _coerce(RegimeAnalysisResult, rg.analyze_factor_regimes(bars, req, baselines=baselines))
+    if res.artifact_uri is None:
+        uri = _save_artifact(f"regime_{expr_hash(res.factor_id)}", "regime_analysis", json.loads(res.model_dump_json()))
+        if uri:
+            res = res.model_copy(update={"artifact_uri": uri})
+    return res
+
+
+def capacity(req: CapacityAnalysisRequest) -> CapacityFrontierResult:
+    req, snap = _pin(req)
+    cp = _lazy("quant_core.risk.capacity", "v3-formal-engine")
+    bars, _, scores = _alpha_inputs(req.experiment_id, req.universe_id, snap)
+    weights = _tilted_weights(scores, _bench_weights(req.universe_id, snap))
+    rec = _find_experiment(req.experiment_id)
+    gross = float(rec.oos_excess_ann) if rec is not None else None
+    res = _coerce(
+        CapacityFrontierResult,
+        cp.analyze_capacity_frontier(bars, req, target_weights=weights, gross_excess_ann_pct=gross),
+    )
+    if res.artifact_uri is None:
+        uri = _save_artifact(f"capacity_{expr_hash(req.experiment_id)}", "capacity_frontier", json.loads(res.model_dump_json()))
+        if uri:
+            res = res.model_copy(update={"artifact_uri": uri})
+    return res
+
+
+# --- research ledger / orchestrator ---------------------------------------------------------------
+
+
+def research_clusters(probe_health: bool = False) -> dict[str, Any]:
+    out = _orch().list_clusters(probe_health=probe_health)
+    if isinstance(out, dict) and "clusters" in out:
+        out = out["clusters"]
+    return {"clusters": dump(list(out))}
+
+
+def _norm_studies(out: Any) -> dict[str, Any]:
+    if isinstance(out, dict):
+        studies = dump(list(out.get("studies", [])))
+        edges = out.get("lineage_edges")
+        total = int(out.get("total", len(studies)))
+    else:
+        studies, edges, total = dump(list(out)), None, len(out)
+    if edges is None:
+        ids = {s["study_id"] for s in studies}
+        edges = [
+            {"parent_study_id": s["parent_study_id"], "study_id": s["study_id"]}
+            for s in studies
+            if s.get("parent_study_id") in ids
+        ]
+    return {"total": total, "studies": studies, "lineage_edges": dump(edges)}
+
+
+def research_list_studies(
+    status: str | None = None,
+    verdict: str | None = None,
+    family_id: str | None = None,
+    parent_study_id: str | None = None,
+    q: str | None = None,
+    limit: int = 50,
+) -> dict[str, Any]:
+    orch = _orch()
+    kw: dict[str, Any] = {
+        "status": status, "verdict": verdict, "family_id": family_id,
+        "parent_study_id": parent_study_id, "q": q, "limit": limit,
+    }
+    out = _norm_studies(orch.list_studies(**kw))
+    if out["total"] == 0:
+        snap = _snapshot_or_none()
+        if snap is not None:  # idempotent: seeds the 3 deterministic golden studies on first use
+            orch.ensure_golden_studies(snap.snapshot_id)
+            out = _norm_studies(orch.list_studies(**kw))
+    return out
+
+
+def research_get_study(study_id: str) -> ResearchStudyDetail:
+    try:
+        out = _orch().get_study(study_id)
+    except (KeyError, LookupError) as exc:
+        raise NotFound(f"research study {study_id!r} not found") from exc
+    if out is None:
+        raise NotFound(f"research study {study_id!r} not found")
+    return _coerce(ResearchStudyDetail, out)
+
+
+def research_dispatch(
+    req: ResearchDispatchRequest, async_mode: bool = True, idempotency_key: str | None = None
+) -> ResearchDispatchResponse:
+    snap = deps.require_snapshot(req.snapshot_id)
+    upd: dict[str, Any] = {"snapshot_id": snap.snapshot_id}
+    if idempotency_key and not req.idempotency_key:
+        upd["idempotency_key"] = idempotency_key
+    req = req.model_copy(update=upd)
+    if req.kind == "factor" and not (req.expression or req.factor_id):
+        raise InvalidArgument("kind=factor requires `expression` or `factor_id`")
+    return _coerce(ResearchDispatchResponse, _orch().dispatch_study(req, async_mode=async_mode))
+
+
+def research_publish(study_id: str, req: PublishFindingRequest) -> ResearchStudyDetail:
+    """External findings are never trusted: the orchestrator re-verifies them with the server-side FormalVerifier."""
+    snap = deps.require_snapshot(req.snapshot_id)
+    req = req.model_copy(update={"snapshot_id": snap.snapshot_id})
+    research_get_study(study_id)  # 404 early
+    det = _coerce(ResearchStudyDetail, _orch().publish_finding(study_id, req))
+    if det.verdict == "VERIFIED" and (det.formal_proof is None or not det.formal_proof.passed):
+        raise ServiceUnavailable(
+            f"study {study_id} cannot be VERIFIED without a passing server-side formal proof", code="PROOF_FAILED"
+        )
+    return det
+
+
+def research_memo(study_id: str) -> dict[str, Any]:
+    research_get_study(study_id)  # 404 early
+    out = _orch().export_memo(study_id)
+    if isinstance(out, dict):
+        md = str(out.get("markdown", ""))
+        name = str(out.get("filename") or f"{study_id}-ic-memo.md")
+    else:
+        md, name = str(out), f"{study_id}-ic-memo.md"
+    return {"study_id": study_id, "filename": name, "markdown": md}
+
+
+def _sse_frame(ev: Any) -> str:
+    if isinstance(ev, str):
+        return ev if ev.endswith("\n\n") else ev.rstrip("\n") + "\n\n"
+    d = dump(ev)
+    head = ""
+    if d.get("seq") is not None:
+        head += f"id: {d['seq']}\n"
+    head += f"event: {d.get('event_type') or 'message'}\n"
+    return head + f"data: {json.dumps(d, default=str, ensure_ascii=False)}\n\n"
+
+
+def research_event_stream(study_id: str, after_seq: int = 0) -> Iterator[str]:
+    orch = _orch()
+    for ev in orch.stream_events(study_id, after_seq=after_seq):
+        yield _sse_frame(ev)
+
+
+def research_baselines(snapshot_id: str | None = None, universe_id: str = "CSI500", build: bool = False) -> dict[str, Any]:
+    snap = deps.require_snapshot(snapshot_id)
+    orch = _orch()
+    fn = orch.build_baselines if build else orch.list_baselines
+    rows = fn(snapshot_id=snap.snapshot_id, universe_id=universe_id)
+    return {"snapshot_id": snap.snapshot_id, "universe_id": universe_id, "baselines": dump(list(rows))}
+
+
+def _tomb_payload(items: Any) -> dict[str, Any]:
+    if isinstance(items, dict) and "items" in items:
+        items = items["items"]
+    if not isinstance(items, list | tuple):
+        items = [items]
+    return {"count": len(items), "items": dump(list(items))}
+
+
+def research_tombstones(q: str | None = None, expr_hash: str | None = None, limit: int = 50) -> dict[str, Any]:
+    return _tomb_payload(_orch().list_tombstones(q=q, expr_hash=expr_hash, limit=limit))
+
+
+def research_add_tombstone(**fields: Any) -> dict[str, Any]:
+    snap = deps.require_snapshot(fields.get("snapshot_id"))
+    fields = {**fields, "snapshot_id": snap.snapshot_id}
+    return _tomb_payload(_orch().add_tombstone(**fields))
+
+
+def research_publish_external(
+    study_id: str | None, req: PublishFindingRequest, title: str = "", hypothesis: str = ""
+) -> ResearchStudyDetail:
+    """MCP helper: open an `external_publish` study when none exists, then publish + server-side re-verify."""
+    if study_id:
+        return research_publish(study_id, req)
+    snap = deps.require_snapshot(req.snapshot_id)
+    disp = ResearchDispatchRequest(
+        title=title or req.title or "External worker finding",
+        hypothesis=hypothesis or req.notes or title or "External worker candidate expression",
+        expression=req.candidate_expression,
+        factor_id=req.factor_id,
+        dispatch_mode="external_publish",
+        target_cluster=req.worker_cluster_id,
+        universe_id=req.universe_id,
+        snapshot_id=snap.snapshot_id,
+        math_derivation=req.math_derivation,
+        created_by=req.worker_cluster_id,
+    )
+    resp = _coerce(ResearchDispatchResponse, _orch().dispatch_study(disp, async_mode=False))
+    if resp.duplicate_blocked:
+        raise InvalidArgument("duplicate of a falsified tombstone; pass an existing study_id or change the expression")
+    return research_publish(resp.study.study_id, req.model_copy(update={"snapshot_id": snap.snapshot_id}))

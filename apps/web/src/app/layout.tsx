@@ -4,8 +4,8 @@ import { AppShell } from '@/components/AppShell';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: 'QuantLab Pro · 机构级量化投研终端 V2',
-  description: 'PIT 数据底座 · Alpha 因子工坊 · CPCV 过拟合防线 · Barra CNE6 + cvxpy · A 股微结构回测 · 影子实盘 · Agent Home Quant Bot'
+  title: 'QuantLab Pro · 机构级量化投研终端 V3',
+  description: '研究工作台与集群派发 · 形式化验证证明链 · PIT 数据底座 · Alpha 因子工坊 · CPCV 过拟合防线 · Barra CNE6 + cvxpy · A 股微结构回测 · 影子实盘 · Agent Home Quant Bot'
 };
 
 export const viewport: Viewport = { width: 'device-width', initialScale: 1 };

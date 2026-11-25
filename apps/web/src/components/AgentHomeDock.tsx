@@ -10,8 +10,13 @@ import { BUILTIN_FACTORS, VIEWS } from '@/lib/meta';
 import { quantApi, QuantApiError } from '@/lib/quant-api';
 import type { FactorDecayItem, PortfolioOptResult } from '@/lib/types';
 import { useExternalConstraintPatch, useWorkbench, type BotId, type QuickCmd } from '@/lib/workbench';
+import { getTerm, getTerms, loadBuiltinTerms } from '@/lib/glossary';
+import { bestTerm } from '@/lib/glossary/search';
+import { openGlossary, openStudyDrawer } from '@/lib/glossary/store';
+import type { TermQuery } from '@/lib/glossary/types';
+import type { StudyDraft } from '@/lib/research-api';
 import { A2uiSurface, type A2uiActionEvent } from './dock/A2uiSurface';
-import { AGENT_HOME_START_CMD, BOTS, QUICK_CMDS, REGISTER_BOT_CMD, STABLE_SYSTEM_VERSION, botMeta } from './dock/constants';
+import { AGENT_HOME_START_CMD, BOTS, COMPUTE_CMDS, QUICK_CMDS, REGISTER_BOT_CMD, STABLE_SYSTEM_VERSION, botMeta } from './dock/constants';
 import { InlineMd } from './dock/InlineMd';
 import {
   compareOpt,
@@ -21,6 +26,9 @@ import {
   summarizeCpcv,
   summarizeDecay,
   summarizeEval,
+  studyCard,
+  termBotText,
+  termCard,
   type SurfaceBatch
 } from './dock/local-diagnostics';
 import { Icon } from './icons';
@@ -54,11 +62,19 @@ const QUICK_PROMPTS: Record<QuickCmd, string> = {
   ic: '请调用 quant MCP 的因子评估工具，对 quant_canvas_context 中的当前因子与预处理管道计算 RankIC/ICIR/NW-t 与 10 分层单调性，并逐项解读 6/6 入库门禁。',
   cpcv: '请对 quant_canvas_context 中的当前实验执行 CPCV 过拟合体检（15 条 OOS 路径、PBO、DSR、负路径占比），给出是否允许进入组合优化的结论。',
   barra:
-    '请调用 Barra 暴露 / 组合优化工具诊断当前约束下的 CNE6 风格与申万行业暴露；若越过 ±0.5σ 硬线，用 A2UI 约束调参卡（turnoverLambda / maxIndustryDev / maxSizeZ，action quant.rerun_optimization）给出建议。'
+    '请调用 Barra 暴露 / 组合优化工具诊断当前约束下的 CNE6 风格与申万行业暴露；若越过 ±0.5σ 硬线，用 A2UI 约束调参卡（turnoverLambda / maxIndustryDev / maxSizeZ，action quant.rerun_optimization）给出建议。',
+  term: '请解释 term_query 中的量化术语，并结合 quant_canvas_context 的实测值判断是否满足机构红线。',
+  study:
+    '请基于 study_draft 与 quant_canvas_context 起草一份可证伪的研究：给出经济假设、数学推导（公式 + 适用边界）、预期失效 Regime 与需要的维度切片；用 A2UI QuantStudyCard（action quant.spawn_child_study，context 为完整草稿字段）返回，不要直接派发。'
 };
+
+const TERM_RE = /^\/(查术语|术语|term)\s*/i;
+const STUDY_RE = /^\/(派发研究|研究|study)\s*/i;
 
 function matchCommand(text: string): QuickCmd | null {
   const t = text.toLowerCase();
+  if (TERM_RE.test(text) || /什么是|是什么意思|含义|术语/.test(t)) return 'term';
+  if (STUDY_RE.test(text) || /派发|集群|起草研究/.test(t)) return 'study';
   if (/barra|风险|暴露|size|约束|组合/.test(t)) return 'barra';
   if (/cpcv|过拟合|pbo|dsr/.test(t)) return 'cpcv';
   if (/\bic\b|ic值|分层|因子|rankic/.test(t)) return 'ic';
@@ -102,6 +118,13 @@ export function AgentHomeDock() {
   // ---------------------------------------------------------------- canvas context (user-prefix injection)
   const latestSnapshot = typeof wb.api.health?.snapshot_id === 'string' ? wb.api.health.snapshot_id : null;
   const viewMetrics = wb.metrics[wb.view];
+  const selStudy = wb.studyId ? wb.research.studies.find((x) => x.study_id === wb.studyId) : undefined;
+  const studyKey = wb.view === 'research' && wb.studyId ? `${wb.studyId}|${selStudy?.status ?? ''}|${selStudy?.verdict ?? ''}|${selStudy?.stage ?? ''}` : '';
+  const studyCtx = useMemo(() => {
+    if (!studyKey || !wb.studyId) return null;
+    return { study_id: wb.studyId, status: selStudy?.status, verdict: selStudy?.verdict, stage: selStudy?.stage, target_cluster: selStudy?.target_cluster, family_id: selStudy?.family_id };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [studyKey]);
   const canvas = useMemo(
     () =>
       buildCanvasContext({
@@ -114,9 +137,11 @@ export function AgentHomeDock() {
         experimentId: wb.experimentId,
         engine: wb.engine,
         constraints: wb.constraints,
-        metrics: viewMetrics
+        metrics: viewMetrics,
+        study: studyCtx,
+        termFocus: wb.termFocus ? { term_id: wb.termFocus.termId, value: wb.termFocus.value, verdict: wb.termFocus.verdict, threshold: wb.termFocus.threshold } : null
       }),
-    [wb.view, wb.universe, wb.snapshotId, latestSnapshot, wb.factorId, wb.preprocess, wb.experimentId, wb.engine, wb.constraints, viewMetrics]
+    [wb.view, wb.universe, wb.snapshotId, latestSnapshot, wb.factorId, wb.preprocess, wb.experimentId, wb.engine, wb.constraints, viewMetrics, studyCtx, wb.termFocus]
   );
   const canvasRef = useRef(canvas);
   useEffect(() => {
@@ -396,7 +421,7 @@ export function AgentHomeDock() {
   );
 
   const sendOnline = useCallback(
-    async (b: BotId, text: string, opts?: { display?: string; fallback?: QuickCmd }) => {
+    async (b: BotId, text: string, opts?: { display?: string; fallback?: QuickCmd | (() => void | Promise<void>) }) => {
       const runningSid = aborts.current[b] ? sessions.current[b] : undefined;
       if (runningSid) {
         push(b, { id: uid('u'), kind: 'user', text: opts?.display ?? text, steer: true, time: nowHms() });
@@ -415,7 +440,10 @@ export function AgentHomeDock() {
         if (e instanceof AgentHomeError && e.status === 404) sys(b, `Agent Home 在线，但 bot「${b}」未注册。在 stock-research 根目录执行：`, 'err', REGISTER_BOT_CMD);
         else if (e instanceof AgentHomeError && e.status === 401) sys(b, 'Agent Home 拒绝鉴权（401）：检查 apps/web 进程的 RAW_AGENT_AUTH_TOKEN 是否与 daemon 一致', 'err');
         else sys(b, `打开 bot session 失败：${errMsg(e)}`, 'err');
-        if (opts?.fallback) {
+        if (typeof opts?.fallback === 'function') {
+          sys(b, '回退为本地确定性输出（不经 LLM）');
+          await opts.fallback();
+        } else if (opts?.fallback) {
           sys(b, '回退为本地确定性诊断（quant-api 实算，不经 LLM）');
           await runLocal(b, opts.fallback);
         }
@@ -428,29 +456,113 @@ export function AgentHomeDock() {
     [push, sys, ensureSession, runLocal, streamTurn]
   );
 
+  // ---------------------------------------------------------------- V3 · term explain / study drafting
+  const explainTerm = useCallback(
+    async (b: BotId, q: TermQuery | string) => {
+      await loadBuiltinTerms();
+      const term = typeof q === 'string' ? (getTerm(q.trim()) ?? bestTerm(getTerms(), q)) : getTerm(q.termId);
+      const query: TermQuery | null = typeof q === 'string' ? (term ? { termId: term.id, term: `${term.zh} (${term.en})`, view: wbRef.current.view } : null) : q;
+      const display = `/查术语 ${term ? term.zh : typeof q === 'string' ? q : q.termId}${query?.display ? ` = ${query.display}` : ''}`;
+      if (!term || !query) {
+        push(b, { id: uid('u'), kind: 'user', text: display, time: nowHms() });
+        sys(b, `术语库未收录「${typeof q === 'string' ? q : q.termId}」。可按 ⌘K 打开术语速查库检索。`, 'err');
+        return;
+      }
+      wbRef.current.setTermFocus(query);
+      const local = () => {
+        pushBot(b, termBotText(term, query), 'local');
+        pushSurface(b, termCard(uid('surf-term'), term));
+      };
+      if (wbRef.current.agent.online) {
+        const payload = Object.fromEntries(Object.entries({ term_id: query.termId, term: query.term, value: query.value, display: query.display, threshold: query.threshold, verdict: query.verdict, gap: query.gap, view: query.view, context: query.context }).filter(([, v]) => v !== undefined && v !== null && v !== ''));
+        const text = `<term_query>\n${JSON.stringify(payload)}\n</term_query>\n${QUICK_PROMPTS.term}${term.botPrompt ? `\n${term.botPrompt}` : ''}`;
+        return sendOnline(b, text, { display, fallback: local });
+      }
+      push(b, { id: uid('u'), kind: 'user', text: display, time: nowHms() });
+      local();
+    },
+    [push, sys, pushBot, pushSurface, sendOnline]
+  );
+
+  const draftFromCanvas = useCallback((hint?: string): StudyDraft => {
+    const w = wbRef.current;
+    return {
+      title: hint ? hint.slice(0, 40) : `${w.factorId} · ${w.view.toUpperCase()} 复研`,
+      hypothesis: hint ?? '',
+      kind: w.view === 'portfolio' ? 'portfolio_method' : w.view === 'shadow' || w.view === 'backtest' ? 'execution_method' : w.view === 'models' ? 'model' : 'factor',
+      factor_id: w.factorId,
+      universe_id: w.universe,
+      parent_study_id: w.view === 'research' ? w.studyId : null,
+      constraints: w.view === 'portfolio' ? w.constraints : null,
+      source: VIEWS.find((v) => v.key === w.view)?.path ?? w.view
+    };
+  }, []);
+
+  const dispatchStudy = useCallback(
+    async (b: BotId, draft: StudyDraft) => {
+      const card = () =>
+        pushSurface(
+          b,
+          studyCard(
+            uid('surf-study'),
+            { title: draft.title || '未命名研究', parent_study_id: draft.parent_study_id, kind: draft.kind, hypothesis: draft.hypothesis, target_cluster: draft.target_cluster, warnings: draft.avoid?.map((a) => `规避：${a}`) },
+            draft as unknown as Record<string, unknown>
+          )
+        );
+      const display = `/派发研究 ${draft.title || draft.factor_id || ''}`.trim();
+      if (wbRef.current.agent.online) {
+        const text = `<study_draft>\n${JSON.stringify(draft)}\n</study_draft>\n${QUICK_PROMPTS.study}`;
+        return sendOnline(b, text, { display, fallback: card });
+      }
+      push(b, { id: uid('u'), kind: 'user', text: display, time: nowHms() });
+      sys(b, 'DAEMON OFFLINE · Quant-Lead 无法起草；已生成本地研究草稿卡，可在抽屉中补全假设后直接派发集群。');
+      card();
+    },
+    [pushSurface, sendOnline, push, sys]
+  );
+
   const dispatchText = useCallback(
     async (b: BotId, text: string) => {
       const t = text.trim();
       if (!t) return;
+      if (TERM_RE.test(t)) return explainTerm(b, t.replace(TERM_RE, '') || 'rank_ic');
+      if (STUDY_RE.test(t)) {
+        const hint = t.replace(STUDY_RE, '').trim();
+        if (!hint) {
+          openStudyDrawer(draftFromCanvas());
+          return;
+        }
+        return dispatchStudy(b, draftFromCanvas(hint));
+      }
       if (wbRef.current.agent.online) return sendOnline(b, t);
-      push(b, { id: uid('u'), kind: 'user', text: t, time: nowHms() });
       const cmd = matchCommand(t);
+      if (cmd === 'term') return explainTerm(b, t.replace(/什么是|是什么意思|的含义|含义|术语|[？?]/g, '').trim() || t);
+      if (cmd === 'study') return dispatchStudy(b, draftFromCanvas(t));
+      push(b, { id: uid('u'), kind: 'user', text: t, time: nowHms() });
       if (cmd) {
         sys(b, `DAEMON OFFLINE · 自由对话需要 Agent Home。已匹配本地确定性指令 ${QUICK_CMDS.find((q) => q.key === cmd)?.label}`);
         await runLocal(b, cmd);
       } else sys(b, 'DAEMON OFFLINE · 自由对话需要 Agent Home（快捷指令仍可直连 quant-api）。启动 Agent Home：', 'err', AGENT_HOME_START_CMD);
     },
-    [sendOnline, push, sys, runLocal]
+    [sendOnline, push, sys, runLocal, explainTerm, dispatchStudy, draftFromCanvas]
   );
 
   const dispatchCommand = useCallback(
     async (b: BotId, cmd: QuickCmd) => {
+      if (cmd === 'term') {
+        openGlossary();
+        return;
+      }
+      if (cmd === 'study') {
+        openStudyDrawer(draftFromCanvas());
+        return;
+      }
       const label = QUICK_CMDS.find((q) => q.key === cmd)?.label ?? cmd;
       if (wbRef.current.agent.online) return sendOnline(b, `${label}\n${QUICK_PROMPTS[cmd]}`, { display: label, fallback: cmd });
       push(b, { id: uid('u'), kind: 'user', text: label, time: nowHms() });
       await runLocal(b, cmd);
     },
-    [sendOnline, push, runLocal]
+    [sendOnline, push, runLocal, draftFromCanvas]
   );
 
   const diagnose = useCallback(
@@ -522,9 +634,47 @@ export function AgentHomeDock() {
         }
         return null;
       }
+      if (e.name === 'quant.open_study') {
+        const id = String(e.context.study_id ?? e.dataModel?.study_id ?? '');
+        if (!id) return null;
+        w.setStudyId(id);
+        router.push(`/research?study=${encodeURIComponent(id)}`);
+        return `已打开研究 ${id}`;
+      }
+      if (e.name === 'quant.spawn_child_study') {
+        const src = { ...(e.dataModel ?? {}), ...e.context } as Record<string, unknown>;
+        const str = (k: string) => (typeof src[k] === 'string' && src[k] ? (src[k] as string) : undefined);
+        const draft: StudyDraft = {
+          title: str('title'),
+          hypothesis: str('hypothesis'),
+          kind: (str('kind') as StudyDraft['kind']) ?? 'factor',
+          parent_study_id: str('parent_study_id') ?? null,
+          family_id: str('family_id') ?? null,
+          lockParent: Boolean(str('parent_study_id')),
+          factor_id: str('factor_id') ?? w.factorId,
+          expression: str('expression') ?? null,
+          universe_id: str('universe_id') ?? w.universe,
+          target_cluster: str('target_cluster'),
+          dimensions: Array.isArray(src.dimensions) ? (src.dimensions as unknown[]).map(String) : undefined,
+          avoid: Array.isArray(src.avoid) ? (src.avoid as unknown[]).map(String) : undefined,
+          source: 'Bot Dock · A2UI'
+        };
+        openStudyDrawer(draft);
+        return draft.parent_study_id ? `已打开子研究草稿（parent ${draft.parent_study_id}）` : '已打开研究草稿抽屉';
+      }
+      if (e.name === 'quant.explain_term') {
+        const id = String(e.context.term_id ?? e.context.query ?? '');
+        if (!id) return null;
+        if (e.context.open === 'glossary') {
+          openGlossary(id);
+          return `已在术语库打开 ${id}`;
+        }
+        void explainTerm(b, id);
+        return `解读术语 ${id}`;
+      }
       return null;
     },
-    [sys, patchConstraints, router, reoptimize]
+    [sys, patchConstraints, router, reoptimize, explainTerm]
   );
 
   const onA2uiAction = useCallback(
@@ -613,9 +763,9 @@ export function AgentHomeDock() {
   }, [wb.agent.online, bot, threads, loadHistory]);
 
   // ---------------------------------------------------------------- DockController (pages → dock)
-  const actions = useRef({ dispatchText, dispatchCommand, diagnose });
+  const actions = useRef({ dispatchText, dispatchCommand, diagnose, explainTerm, dispatchStudy });
   useEffect(() => {
-    actions.current = { dispatchText, dispatchCommand, diagnose };
+    actions.current = { dispatchText, dispatchCommand, diagnose, explainTerm, dispatchStudy };
   });
   const { registerDock } = wb;
   useEffect(() => {
@@ -633,6 +783,14 @@ export function AgentHomeDock() {
       diagnoseFactor: (item, ctx) => {
         setBot('alpha-miner');
         void actions.current.diagnose('alpha-miner', item, ctx);
+      },
+      explainTerm: (q) => {
+        setBot('quant-lead');
+        void actions.current.explainTerm('quant-lead', q);
+      },
+      dispatchStudy: (draft) => {
+        setBot('quant-lead');
+        void actions.current.dispatchStudy('quant-lead', draft);
       }
     });
     return () => registerDock(null);
@@ -859,9 +1017,9 @@ export function AgentHomeDock() {
           <button
             key={q.key}
             className="bcmd"
-            disabled={localRunning || daemonRunning || (!online && !wb.apiOnline)}
+            disabled={COMPUTE_CMDS.has(q.key) && (localRunning || daemonRunning || (!online && !wb.apiOnline))}
             onClick={() => void dispatchCommand(bot, q.key)}
-            title={online ? '经 Agent Home bot 执行（MCP 工具）' : wb.apiOnline ? '本地 quant-api 实算' : 'quant-api 离线'}
+            title={`${q.title} · ${!COMPUTE_CMDS.has(q.key) ? '本地抽屉' : online ? '经 Agent Home bot 执行（MCP 工具）' : wb.apiOnline ? '本地 quant-api 实算' : 'quant-api 离线'}`}
           >
             <Icon name={q.icon} size={11} />
             {q.label}
@@ -877,7 +1035,7 @@ export function AgentHomeDock() {
           value={input}
           onChange={(e) => setInput(e.target.value)}
           onKeyDown={onKey}
-          placeholder={daemonRunning ? 'Steer：补充指令将注入正在运行的任务…' : online ? `向 ${meta.short} 提问（自动附带画布上下文）` : '离线：输入将匹配本地确定性指令（IC / CPCV / Barra）'}
+          placeholder={daemonRunning ? 'Steer：补充指令将注入正在运行的任务…' : online ? `向 ${meta.short} 提问（自动附带画布上下文）` : '离线：输入匹配本地指令（IC / CPCV / Barra / 查术语 / 派发研究）'}
         />
         <button className={`sendb${daemonRunning ? ' steer' : ''}`} onClick={submit} disabled={localRunning} title={daemonRunning ? 'Steer 正在运行的任务' : '发送 (Enter)'}>
           <Icon name={daemonRunning ? 'bolt' : 'send'} size={14} />

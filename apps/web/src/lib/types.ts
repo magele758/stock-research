@@ -130,6 +130,14 @@ export interface FactorEvalResult {
   corr_matrix_labels: string[];
   corr_matrix_values: number[][];
   artifact_uri?: string | null;
+  // V3 · optional statistical & formal fields
+  rank_ic_ci95?: number[] | null;
+  icir_ci95?: number[] | null;
+  long_short_ci95?: number[] | null;
+  bootstrap_b?: number;
+  prefix_invariance_passed?: boolean | null;
+  max_prefix_drift?: number | null;
+  dimension_slices?: DimensionSliceItem[];
 }
 
 /** `/factors/catalog` is not pinned by schemas.py; normalized in quant-api.ts. */
@@ -196,6 +204,11 @@ export interface CpcvResult {
   walk_forward_folds: Record<string, unknown>[];
   verdict: GateVerdict;
   gate_details: GateCheckDict[];
+  // V3 · multiple testing & parameter cliff (dict shapes normalized in lib/v3.ts)
+  fdr_q_value?: number | null;
+  spa_p_value?: number | null;
+  fdr_items?: Record<string, unknown>[];
+  param_sensitivity?: Record<string, unknown>[];
 }
 
 // ---------------------------------------------------------------- Q4
@@ -285,6 +298,8 @@ export interface PortfolioOptResult {
   industry_deviations: IndustryDeviation[];
   top_holdings: TargetWeightItem[];
   cvxpy_snippet: string;
+  invariants?: Record<string, unknown>[];
+  capacity_frontier?: Record<string, unknown> | null;
 }
 
 // ---------------------------------------------------------------- Q5
@@ -373,6 +388,8 @@ export interface BacktestResult {
   recent_rejections: RejectedOrderRecord[];
   attribution: AttributionResult;
   artifact_uri?: string | null;
+  invariants?: Record<string, unknown>[];
+  capacity_frontier?: Record<string, unknown> | null;
 }
 
 // ---------------------------------------------------------------- Q6
@@ -445,4 +462,313 @@ export interface McpCatalog {
   transport?: string;
   tools: McpToolStatus[];
   raw: unknown;
+}
+
+// ---------------------------------------------------------------- V3 · Q8 glossary / formal / regime / capacity / research
+export interface ApiGlossaryTerm {
+  term_id: string;
+  term: string;
+  en_name: string;
+  domain: 'Q1' | 'Q2' | 'Q3' | 'Q4' | 'Q5' | 'Q6' | 'MATH';
+  category: string;
+  aliases: string[];
+  short_tip: string;
+  formula_latex: string;
+  formula_lines: string[];
+  institutional_threshold: string;
+  common_pitfalls: string[];
+  related_terms: string[];
+  bot_prompt_template: string;
+}
+
+export interface GlossaryListResponse {
+  count: number;
+  categories: string[];
+  terms: ApiGlossaryTerm[];
+}
+
+export interface InvariantCheckItem {
+  key: string;
+  label: string;
+  value: string;
+  tolerance: string;
+  passed: boolean;
+  detail: string;
+}
+
+export type ProofStatus = 'pass' | 'warn' | 'fail' | 'insufficient' | 'not_applicable';
+
+export interface ProofCheckItem {
+  check_id: string;
+  suite: 'T1' | 'T2' | 'T3' | 'T4';
+  label: string;
+  term_id: string;
+  status: ProofStatus;
+  statistic: string;
+  threshold: string;
+  error_metric: string;
+  reason_code: string;
+  n_observed: number;
+  detail: Record<string, unknown>;
+  witness_keys: string[];
+  evidence_uri?: string | null;
+}
+
+export interface MathDerivationSpec {
+  economic_hypothesis: string;
+  mechanism: string;
+  formula_latex: string;
+  derivation_steps: string[];
+  assumptions: Record<string, unknown>[];
+  boundary_conditions: string[];
+  expected_sign: 'positive' | 'negative' | 'two_sided';
+  expected_failure_regimes: string[];
+}
+
+export interface FormalProofResult {
+  verification_id: string;
+  target_id: string;
+  universe_id: string;
+  snapshot_id: string;
+  as_of: string;
+  passed: boolean;
+  verdict: GateVerdict;
+  proofs_passed: number;
+  proofs_total: number;
+  max_prefix_drift?: number | null;
+  bootstrap_rank_ic_ci95?: number[] | null;
+  bootstrap_p_value?: number | null;
+  bh_fdr_q_value?: number | null;
+  spa_p_value?: number | null;
+  max_param_cliff_drop_pct?: number | null;
+  blocking_failures: string[];
+  checks: ProofCheckItem[];
+  param_sensitivity: Record<string, unknown>[];
+  proof_sha256: string;
+  artifact_uri?: string | null;
+}
+
+export type DimensionKey = 'market_regime' | 'volatility_regime' | 'market_cap_tier' | 'sw_industry' | 'barra_style';
+
+export interface DimensionSliceItem {
+  dim: DimensionKey;
+  bucket: string;
+  strategy_excess_pct: number;
+  baseline_return_pct: number;
+  alpha_vs_baseline_pct: number;
+  rank_ic?: number | null;
+  icir?: number | null;
+  win_rate_pct: number;
+  n_days: number;
+  contribution_pct: number;
+  ci95?: number[] | null;
+  dominant_flag: boolean;
+}
+
+export interface DimensionBaselineRecord {
+  baseline_id: string;
+  snapshot_id: string;
+  universe_id: string;
+  dimension_type: DimensionKey;
+  date_range_start: string;
+  date_range_end: string;
+  current_state: string;
+  bucket_definitions: Record<string, unknown>;
+  bucket_stats: Record<string, unknown>[];
+  baseline_sha256: string;
+  created_at: string;
+}
+
+export interface RegimeAnalysisResult {
+  factor_id: string;
+  universe_id: string;
+  snapshot_id: string;
+  regime_consistency_score?: number | null;
+  single_dim_dominance_flag: boolean;
+  dominant_bucket?: string | null;
+  dominant_share_pct?: number | null;
+  warning_summary?: string | null;
+  slices: DimensionSliceItem[];
+  baselines: DimensionBaselineRecord[];
+  artifact_uri?: string | null;
+}
+
+export interface CapacityPoint {
+  aum_cny: number;
+  gross_excess_pct: number;
+  net_excess_pct: number;
+  ir_ann: number;
+  impact_bps: number;
+  explicit_cost_bps: number;
+  pov_pct: number;
+  fill_rate_pct: number;
+}
+
+export interface CapacityFrontierResult {
+  experiment_id: string;
+  universe_id: string;
+  snapshot_id: string;
+  calibration_status: 'uncalibrated_scenario' | 'calibrated';
+  current_aum_cny: number;
+  half_alpha_aum_cny?: number | null;
+  breakeven_aum_cny?: number | null;
+  binding_bottleneck: string;
+  points: CapacityPoint[];
+  illiquid_names: Record<string, unknown>[];
+  artifact_uri?: string | null;
+}
+
+export interface DiagnosisItem {
+  id: string;
+  rule_id: string;
+  root_cause: string;
+  severity: 'critical' | 'major' | 'minor';
+  claim: string;
+  evidence: Record<string, unknown>[];
+  guidance: string[];
+  constraints_patch?: Partial<OptConstraints> | Record<string, unknown> | null;
+  child_study_patch?: Record<string, unknown> | null;
+}
+
+export interface ClusterNodeStatus {
+  cluster_id: string;
+  display_name: string;
+  adapter: string;
+  agent_cli: string;
+  status: 'online' | 'degraded' | 'offline';
+  slots_busy: number;
+  slots_total: number;
+  queue_depth: number;
+  capabilities: string[];
+  last_heartbeat: string;
+  detail: string;
+}
+
+export type StudyStatus = 'DRAFT' | 'QUEUED' | 'DISPATCHED' | 'DEVELOPING' | 'VERIFYING' | 'DIAGNOSING' | 'COMPLETED' | 'FALSIFIED' | 'FAILED';
+export type StudyVerdict = 'PENDING' | 'VERIFIED' | 'FALSIFIED' | 'INCONCLUSIVE' | 'ERROR';
+export type StudyKind = 'factor' | 'model' | 'portfolio_method' | 'execution_method';
+export type DispatchMode = 'engine_sandbox' | 'cluster_dev_worker' | 'external_publish';
+
+export interface ResearchDispatchRequest {
+  title: string;
+  hypothesis: string;
+  kind?: StudyKind;
+  parent_study_id?: string | null;
+  family_id?: string | null;
+  topic_tags?: string[];
+  dispatch_mode?: DispatchMode;
+  target_cluster?: string;
+  universe_id?: string;
+  snapshot_id?: string | null;
+  factor_id?: string | null;
+  expression?: string | null;
+  math_derivation?: MathDerivationSpec | null;
+  preprocess?: PreprocessConfig;
+  constraints?: OptConstraints | null;
+  dimensions?: string[];
+  trial_count_m?: number;
+  bootstrap_b?: number;
+  allow_duplicate?: boolean;
+  override_rationale?: string | null;
+  idempotency_key?: string | null;
+  created_by?: string;
+}
+
+export interface StudyEventRecord {
+  event_id: string;
+  study_id: string;
+  seq: number;
+  stage: string;
+  event_type: string;
+  progress_pct: number;
+  message: string;
+  payload: Record<string, unknown>;
+  actor: string;
+  created_at: string;
+}
+
+export interface FalsifiedTombstoneRecord {
+  tombstone_id: string;
+  study_id?: string | null;
+  factor_id: string;
+  expression: string;
+  expr_hash: string;
+  ast_fingerprint: string;
+  universe_id: string;
+  snapshot_id: string;
+  failure_code: string;
+  failure_metrics: Record<string, unknown>;
+  lesson_summary: string;
+  memory_line: string;
+  created_by: string;
+  created_at: string;
+}
+
+export interface ResearchStudySummary {
+  study_id: string;
+  parent_study_id?: string | null;
+  family_id: string;
+  title: string;
+  kind: StudyKind;
+  topic_tags: string[];
+  status: StudyStatus;
+  verdict: StudyVerdict;
+  stage: string;
+  dispatch_mode: DispatchMode;
+  target_cluster: string;
+  universe_id: string;
+  snapshot_id: string;
+  job_id?: string | null;
+  oos_sharpe?: number | null;
+  rank_ic_mean?: number | null;
+  dsr?: number | null;
+  pbo?: number | null;
+  net_excess_ann_pct?: number | null;
+  proofs_passed: number;
+  proofs_total: number;
+  created_by: string;
+  created_at: string;
+  updated_at: string;
+  completed_at?: string | null;
+}
+
+export interface ResearchStudyDetail extends ResearchStudySummary {
+  hypothesis: string;
+  factor_id?: string | null;
+  expression?: string | null;
+  math_derivation?: MathDerivationSpec | null;
+  formal_proof?: FormalProofResult | null;
+  metrics_summary: Record<string, unknown>;
+  dimension_analysis?: RegimeAnalysisResult | null;
+  capacity_frontier?: CapacityFrontierResult | null;
+  diagnosis: DiagnosisItem[];
+  improvement_plan: Record<string, unknown>[];
+  stages: Record<string, unknown>[];
+  events: StudyEventRecord[];
+  lineage: ResearchStudySummary[];
+  notes: Record<string, unknown>[];
+  tombstone_warnings: Record<string, unknown>[];
+  fact_fingerprint: string;
+  artifact_uri?: string | null;
+}
+
+export interface AsyncJobRecord {
+  job_id: string;
+  job_type: string;
+  status: 'queued' | 'running' | 'completed' | 'failed' | 'cancelled';
+  created_at: string;
+  updated_at: string;
+  snapshot_id: string;
+  progress_pct: number;
+  summary?: Record<string, unknown> | null;
+  artifact_uri?: string | null;
+  error?: string | null;
+}
+
+export interface ResearchDispatchResponse {
+  study: ResearchStudySummary;
+  job?: AsyncJobRecord | null;
+  detail?: ResearchStudyDetail | null;
+  tombstone_warnings: Record<string, unknown>[];
+  duplicate_blocked: boolean;
 }

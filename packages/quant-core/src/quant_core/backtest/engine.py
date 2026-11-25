@@ -21,13 +21,18 @@ import numpy as np
 import polars as pl
 
 from ..risk.barra_opt import BARRA_STYLES, build_barra_exposure_panel, fit_barra_factor_returns
+from ..risk.capacity import _analyze_capacity
 from ..schemas import (
+    INSTITUTIONAL_GATES,
     AttributionResult,
     BacktestEngineMode,
     BacktestRequest,
     BacktestResult,
     BoardType,
+    CapacityAnalysisRequest,
     FrictionBreakdown,
+    InvariantCheckItem,
+    Market,
     MicrostructureConfig,
     RejectedOrderRecord,
 )
@@ -46,6 +51,9 @@ __all__ = ["get_price_limit_pct", "run_backtest"]
 
 _EMPTY_BAR: dict = {}
 _CHINA_TIME = ZoneInfo("Asia/Shanghai")
+_CAPACITY_BLOCK_REASONS = frozenset(
+    {"SUSPENDED", "NO_QUOTE", "UNKNOWN_PRICE_LIMIT", "OUTSIDE_PRICE_LIMIT", "LIMIT_UP", "LIMIT_DOWN"}
+)
 
 
 def _prepare_bars(bars: pl.DataFrame) -> pl.DataFrame:
@@ -542,6 +550,77 @@ def _underwater(nav: np.ndarray) -> np.ndarray:
     return nav / peak - 1
 
 
+def _backtest_invariants(
+    attribution: AttributionResult,
+    friction: FrictionBreakdown,
+    nav_residual: float,
+    cash_residual: float,
+    t_plus_one_violations: int,
+) -> list[dict]:
+    charges = (
+        friction.commission_pct
+        + friction.stamp_duty_pct
+        + friction.transfer_fee_pct
+        + friction.impact_slippage_pct
+        + friction.limit_suspend_pct
+    )
+    friction_residual_bp = max(
+        abs((friction.gross_excess_pct - friction.net_excess_pct) - charges) * 100,
+        abs(charges * 100 - friction.total_friction_bps),
+        abs(charges + attribution.barra_cost_pct) * 100,
+        cash_residual * 10_000,
+    )
+    closure_tol = INSTITUTIONAL_GATES["closure_error_bp_max"]
+    evidence = [
+        (
+            "brinson_closure",
+            "Brinson closure (bp)",
+            attribution.brinson_closure_error_bp,
+            closure_tol,
+            "Maximum daily and linked residual versus independently measured active return.",
+        ),
+        (
+            "barra_closure",
+            "Barra closure (bp)",
+            attribution.barra_closure_error_bp,
+            closure_tol,
+            "Maximum daily and linked residual across style, industry, specific and cost terms.",
+        ),
+        (
+            "nav_conservation",
+            "NAV conservation",
+            nav_residual,
+            1e-8,
+            "Largest relative residual across cash, accrued distributions, shares, marks and NAV chain.",
+        ),
+        (
+            "friction_closure",
+            "Friction closure (bp)",
+            friction_residual_bp,
+            closure_tol,
+            "Linked friction components and executed cash debits. Unfilled opportunity is outside the cash ledger.",
+        ),
+        (
+            "t_plus_1_zero_violation",
+            "T+1 sell inventory violations",
+            t_plus_one_violations,
+            0,
+            "Counts CN-equity sales above eligible opening shares, before current-session fills.",
+        ),
+    ]
+    return [
+        InvariantCheckItem(
+            key=key,
+            label=label,
+            value=f"{value:.12g}",
+            tolerance=f"<= {tol:g}",
+            passed=bool(value <= tol),
+            detail=detail,
+        ).model_dump()
+        for key, label, value, tol, detail in evidence
+    ]
+
+
 def run_backtest(
     bars_df: pl.DataFrame,
     corp_actions_df: pl.DataFrame | None,
@@ -646,6 +725,11 @@ def run_backtest(
     benchmark_returns: list[float] = []
     daily_fees: list[np.ndarray] = []
     daily_attribution: list[_DayAttribution] = []
+    audited_nav: list[float] = []
+    capacity_orders: list[tuple[date, str, float, str, bool]] = []
+    nav_residual = 0.0
+    cash_residual = 0.0
+    t_plus_one_violations = 0
     n_fills = 0
     turnover = 0.0
     execute = _screening_trades if req.engine == BacktestEngineMode.SCREENING else _event_trades
@@ -710,8 +794,32 @@ def run_backtest(
             sizing = np.where(pre_close > 0, pre_close, np.where(adjusted_mark > 0, adjusted_mark, opening))
             target_qty = np.divide(nav * weights, sizing, out=np.zeros(n_assets), where=sizing > 0)
             delta = target_qty - positions
+            cash_before_orders = cash
             filled, cash, daily_cost_values, notional, reasons = execute(bars, positions, delta, cash, config)
+            for i in np.flatnonzero(filled < -positions - 1e-8):
+                if (
+                    bars[i].get("board") not in (BoardType.NASDAQ, BoardType.NYSE)
+                    and bars[i].get("market") != Market.US_EQ
+                ):
+                    t_plus_one_violations += 1
+            cash_residual = max(
+                cash_residual,
+                abs(cash - cash_before_orders + float(filled @ opening) + daily_cost_values[:4].sum()) / nav,
+            )
+            reference = np.where(opening > 0, opening, sizing)
+            trade_weights = np.abs(delta) * reference / nav
+            capacity_orders.extend(
+                (
+                    day,
+                    assets[i],
+                    float(trade_weights[i]),
+                    "BUY" if delta[i] > 0 else "SELL",
+                    reasons.get(int(i)) in _CAPACITY_BLOCK_REASONS,
+                )
+                for i in np.flatnonzero(trade_weights > 1e-10)
+            )
             for i in np.flatnonzero((weights > 0) & (sizing <= 0)):
+                capacity_orders.append((day, assets[i], float(weights[i]), "BUY", True))
                 rejections.append(
                     RejectedOrderRecord(
                         trade_date=day.isoformat(),
@@ -751,6 +859,17 @@ def run_backtest(
             timing_pnl = filled @ (current_marks - opening) + extra_cash_entitlement.sum()
             timing_pnl += extra_share_entitlement @ current_marks + daily_cost_values[-1]
             cost_rates = daily_cost_values / nav
+            # Rebuild daily equity from prior book value and changes in entitlements,
+            # marks and fills. Distribution settlement only transfers AR into cash.
+            ledger_nav = (
+                nav
+                + float(start_positions @ (current_marks - marks))
+                + float(distribution @ start_positions)
+                + float((extra_shares * start_positions) @ current_marks)
+                + timing_pnl
+                - daily_cost_values.sum()
+            )
+            nav_residual = max(nav_residual, abs(new_nav - ledger_nav) / nav)
             attrib = _day_attribution(
                 wp,
                 wb,
@@ -769,6 +888,7 @@ def run_backtest(
             benchmark_returns.append(b)
             daily_fees.append(cost_rates)
             daily_attribution.append(attrib)
+            audited_nav.append(new_nav / req.initial_cash)
 
         for event in record_events.get(day, ()):
             entitlement[event] = positions[event.asset]
@@ -810,7 +930,43 @@ def run_backtest(
     for rejection in rejections:
         signature.update(rejection.model_dump_json().encode())
     run_id = "BT-" + signature.hexdigest()[:20]
-    attribution, friction = _attribution_and_friction(run_id, p, b, np.asarray(daily_fees), daily_attribution)
+    fees_by_day = np.asarray(daily_fees)
+    attribution, friction = _attribution_and_friction(run_id, p, b, fees_by_day, daily_attribution)
+    nav_path = np.asarray(audited_nav)
+    nav_residual = max(nav_residual, float(np.max(np.abs(portfolio_nav / nav_path - 1))))
+    invariants = _backtest_invariants(
+        attribution, friction, nav_residual, cash_residual, t_plus_one_violations
+    )
+    orders = pl.DataFrame(
+        capacity_orders,
+        schema={
+            "trade_date": pl.Date,
+            "listing_id": pl.String,
+            "order_weight": pl.Float64,
+            "side": pl.String,
+            "blocked": pl.Boolean,
+        },
+        orient="row",
+    )
+    gross_relative_ann = float(
+        np.expm1((np.log1p(p + fees_by_day[:, :4].sum(axis=1)) - np.log1p(b)).sum() * annualization)
+    )
+    frontier = _analyze_capacity(
+        panel,
+        CapacityAnalysisRequest(
+            experiment_id=req.experiment_id,
+            universe_id=req.universe_id,
+            snapshot_id=req.snapshot_id,
+            impact_coeff_y=config.impact_coeff_y,
+            max_pov=config.max_pov,
+        ),
+        orders=orders,
+        gross_excess_ann_pct=gross_relative_ann * 100,
+        annual_rebalances=orders["trade_date"].n_unique() * annualization,
+        active_vol_ann=float(active_volatility * sqrt(252)),
+        current_aum_cny=req.initial_cash,
+        config=config,
+    )
     return BacktestResult(
         run_id=run_id,
         experiment_id=req.experiment_id,
@@ -838,4 +994,6 @@ def run_backtest(
         friction=friction,
         recent_rejections=rejections[-50:],
         attribution=attribution,
+        invariants=invariants,
+        capacity_frontier=frontier.model_dump(mode="json", exclude={"illiquid_names", "artifact_uri"}),
     )

@@ -3,7 +3,9 @@
 from __future__ import annotations
 
 from collections import defaultdict
+from collections.abc import Sequence
 from datetime import UTC, date, datetime, time
+from functools import lru_cache
 from itertools import combinations, pairwise
 from zoneinfo import ZoneInfo
 
@@ -23,6 +25,7 @@ from quant_core.factors.preprocess import (
     winsorize_mad,
 )
 from quant_core.schemas import (
+    INSTITUTIONAL_GATES,
     FactorCorrRequest,
     FactorCorrResult,
     FactorEvalRequest,
@@ -51,6 +54,17 @@ BUILTIN_FACTORS: dict[str, dict] = {
         "expression": "mean_10((tail_vwap/vwap-1)*sqrt(tail_volume_shares/volume_shares))",
         "lookback": 19,
     },
+}
+_BUILTIN_WINDOWS: dict[str, dict[str, int]] = {
+    "alpha_vp_corr_20d": {"window_size": 20},
+    "alpha_mom_resid_60d": {
+        "skip_lag": 5,
+        "momentum_lag": 60,
+        "vol_window": 60,
+        "smooth_window": 5,
+    },
+    "alpha_earn_sue_pit": {"sue_history": 8},
+    "alpha_smart_money_vwap": {"adv_window": 10, "smooth_window": 10},
 }
 _HORIZONS = (1, 3, 5, 10, 20, 60)
 _MIN_RANK_IC_NAMES = 50
@@ -120,10 +134,12 @@ def _date_sections(frame: pl.DataFrame) -> list[np.ndarray]:
     return np.split(np.arange(frame.height), boundaries) if frame.height else []
 
 
-def _residual_momentum(bars: pl.DataFrame, config: PreprocessConfig) -> pl.DataFrame:
+def _residual_momentum(bars: pl.DataFrame, config: PreprocessConfig, windows: dict[str, int]) -> pl.DataFrame:
     close = _adjusted_price(bars, "close")
-    momentum = close.shift(5).over("_id") / close.shift(60).over("_id") - 1
-    vol = close.pct_change().rolling_std(60).over("_id")
+    momentum = (
+        close.shift(windows["skip_lag"]).over("_id") / close.shift(windows["momentum_lag"]).over("_id") - 1
+    )
+    vol = close.pct_change().rolling_std(windows["vol_window"]).over("_id")
     bars = bars.with_columns(momentum.alias("_momentum"), vol.alias("_mom_vol")).sort(["trade_date", "_id"])
     raw = numeric_column(bars, "_momentum")
     cap = numeric_column(bars, "float_market_cap")
@@ -151,7 +167,7 @@ def _residual_momentum(bars: pl.DataFrame, config: PreprocessConfig) -> pl.DataF
         .with_columns(
             pl.when(pl.col("_mom_vol") > 0)
             .then(pl.col("_momentum_residual") / pl.col("_mom_vol"))
-            .rolling_mean(5)
+            .rolling_mean(windows["smooth_window"])
             .over("_id")
             .alias("factor_raw"),
         )
@@ -166,6 +182,7 @@ def _timestamp(value: datetime | str, zone: ZoneInfo = _CN_TZ) -> datetime:
 
 def _financial_state(
     observations: dict[str, dict[date, float]],
+    sue_history: int,
 ) -> tuple[float, float, float]:
     sue = np.nan
     for metric in ("eps", "net_profit_deducted"):
@@ -179,7 +196,7 @@ def _financial_state(
         ]
         if len(changes) < 5 or changes[-1][0] != periods[-1][0]:
             continue
-        history = np.array([value for _, value in changes[-9:-1]])
+        history = np.array([value for _, value in changes[-(sue_history + 1) : -1]])
         scale = history.std(ddof=1)
         if scale > 0:
             sue = float((changes[-1][1] - history.mean()) / scale)
@@ -203,6 +220,7 @@ def _pit_earnings(
     bars: pl.DataFrame,
     facts: pl.DataFrame | None,
     config: PreprocessConfig,
+    sue_history: int,
 ) -> tuple[pl.DataFrame, list[str]]:
     bars = bars.sort(["trade_date", "_id"])
     eligible = eligible_mask(bars, config)
@@ -302,7 +320,7 @@ def _pit_earnings(
                             known[metric].pop(period, None)
                     end += 1
                 if end != start:
-                    state = _financial_state(known)
+                    state = _financial_state(known, sue_history)
                 descriptors[i] = state
 
     raw = np.full(bars.height, np.nan)
@@ -326,34 +344,40 @@ def _pit_earnings(
     return bars.with_columns(pl.Series("factor_raw", raw, nan_to_null=True)), warnings
 
 
+@lru_cache(maxsize=2048)
+def _market_close(day: date, us: bool) -> datetime:
+    return datetime.combine(day, time(16) if us else time(15), _US_TZ if us else _CN_TZ).astimezone(UTC)
+
+
 def _decision_time(row: dict) -> tuple[ZoneInfo, datetime]:
     us = row.get("market") == "US_EQ" or row.get("board") in ("NYSE", "NASDAQ")
     zone = _US_TZ if us else _CN_TZ
     if row.get("decision_at") is not None:
         return zone, _timestamp(row["decision_at"], zone)
-    close = time(16) if us else time(15)
-    return zone, datetime.combine(row["trade_date"], close, zone).astimezone(UTC)
+    return zone, _market_close(row["trade_date"], us)
 
 
 def _raw_factor(
     bars: pl.DataFrame,
     req: FactorEvalRequest,
     pit_fin_df: pl.DataFrame | None,
+    windows: dict[str, int] | None = None,
 ) -> tuple[pl.DataFrame, list[str]]:
     if req.expression is not None:
         expr = compile_factor_expression(req.expression)
         return bars.with_columns(expr.cast(pl.Float64, strict=False).alias("factor_raw")), []
     if req.factor_id not in BUILTIN_FACTORS:
         raise ValueError(f"Unknown factor {req.factor_id!r}")
+    parameters = _BUILTIN_WINDOWS.get(req.factor_id, {}) | (windows or {})
     if req.factor_id == "alpha_mom_resid_60d":
-        return _residual_momentum(bars, req.preprocess), []
+        return _residual_momentum(bars, req.preprocess, parameters), []
     if req.factor_id == "alpha_earn_sue_pit":
-        return _pit_earnings(bars, pit_fin_df, req.preprocess)
+        return _pit_earnings(bars, pit_fin_df, req.preprocess, parameters["sue_history"])
     if req.factor_id == "alpha_vp_corr_20d":
         rv = _adjusted_price(bars, "close").pct_change().over("_id")
         volume = _number(bars, "volume_shares")
         dv = pl.when(volume >= 0).then(volume.log1p()).diff().over("_id")
-        expr = -pl.rolling_corr(rv, dv, window_size=20).over("_id")
+        expr = -pl.rolling_corr(rv, dv, window_size=parameters["window_size"]).over("_id")
         return bars.with_columns(expr.alias("factor_raw")), []
 
     volume = _number(bars, "volume_shares")
@@ -361,7 +385,7 @@ def _raw_factor(
     tail = _number(bars, "tail_vwap")
     tail_volume = _number(bars, "tail_volume_shares")
     valid_tail = (tail > 0) & (tail_volume > 0) & (tail_volume <= volume)
-    adv = volume.shift(1).rolling_mean(10).over("_id")
+    adv = volume.shift(1).rolling_mean(parameters["adv_window"]).over("_id")
     if {"tail_vwap", "tail_volume_shares"}.issubset(bars.columns):
         expr = pl.when(valid_tail).then((tail / vwap - 1) * (tail_volume / volume).sqrt())
         warnings = ["Missing 14:30–15:00 VWAP inputs leave the corresponding smart-money scores unavailable"]
@@ -369,7 +393,11 @@ def _raw_factor(
         expr = (_number(bars, "close") / vwap - 1) * pl.when(adv > 0).then((volume / adv).sqrt())
         warnings = ["Daily-bar smart-money proxy uses close versus VWAP weighted by relative volume"]
     return bars.with_columns(
-        pl.when((vwap > 0) & (volume > 0)).then(expr).rolling_mean(10).over("_id").alias("factor_raw"),
+        pl.when((vwap > 0) & (volume > 0))
+        .then(expr)
+        .rolling_mean(parameters["smooth_window"])
+        .over("_id")
+        .alias("factor_raw"),
     ), warnings
 
 
@@ -397,8 +425,9 @@ def _compute_panel(
     req: FactorEvalRequest,
     style_columns: tuple[str, ...],
     pit_fin_df: pl.DataFrame | None,
+    windows: dict[str, int] | None = None,
 ) -> tuple[pl.DataFrame, PreprocessDiagnostics, list[str]]:
-    panel, notes = _raw_factor(bars, req, pit_fin_df)
+    panel, notes = _raw_factor(bars, req, pit_fin_df, windows)
     if req.start_date is not None:
         panel = panel.filter(pl.col("trade_date") >= req.start_date)
     panel, diagnostics = preprocess_panel(
@@ -420,11 +449,13 @@ def factor_panel(
     bars_df: pl.DataFrame,
     req: FactorEvalRequest,
     pit_fin_df: pl.DataFrame | None = None,
+    *,
+    windows: dict[str, int] | None = None,
 ) -> pl.DataFrame:
     """Compute causal raw and preprocessed factor values anchored to the signal date."""
     bars = _cutoff(_prepare_bars(bars_df), req)
     bars, style_columns = _with_styles(bars, req.preprocess)
-    panel, _, _ = _compute_panel(bars, req, style_columns, pit_fin_df)
+    panel, _, _ = _compute_panel(bars, req, style_columns, pit_fin_df, windows)
     return panel
 
 
@@ -552,20 +583,35 @@ def newey_west_t_stat(ic: np.ndarray, horizon: int) -> tuple[float, int]:
     return float(ic[observed].mean() / np.sqrt(lrv / n)), bandwidth
 
 
+def _rank_ic_by(panel: pl.DataFrame, target: str, keys: list[str], min_names: int) -> pl.DataFrame:
+    return (
+        panel.filter(pl.all_horizontal(pl.col("factor_value", target).is_finite()))
+        .group_by(keys)
+        .agg(pl.len().alias("_n"), pl.corr("factor_value", target, method="spearman").alias("_rank_ic"))
+        .filter((pl.col("_n") >= min_names) & pl.col("_rank_ic").is_finite())
+        .select(*keys, pl.col("_rank_ic").clip(-1, 1))
+    )
+
+
 def _daily_ic(panel: pl.DataFrame, target: str) -> np.ndarray:
-    factor = numeric_column(panel, "factor_value")
-    labels = numeric_column(panel, target)
-    results = np.full(len(_date_sections(panel)), np.nan)
-    for i, rows in enumerate(_date_sections(panel)):
-        ic = spearman_rank_ic(factor[rows], labels[rows])
-        if ic is not None:
-            results[i] = ic
-    return results
+    dates = panel.select("trade_date").unique(maintain_order=True)
+    correlations = _rank_ic_by(panel, target, ["trade_date"], _MIN_RANK_IC_NAMES)
+    return dates.join(correlations, on="trade_date", how="left", maintain_order="left")["_rank_ic"].to_numpy()
 
 
 def _average(values: np.ndarray) -> float:
     finite = values[np.isfinite(values)]
     return float(finite.mean()) if len(finite) else 0.0
+
+
+def _annualized_icir(values: np.ndarray) -> float:
+    usable = values[np.isfinite(values)]
+    stdev = float(usable.std(ddof=1)) if len(usable) > 1 else 0.0
+    return float(usable.mean() / stdev * np.sqrt(_TRADING_DAYS)) if stdev > 1e-15 else 0.0
+
+
+def _annualized_compound(values: np.ndarray) -> float:
+    return float(max(0.0, np.prod(1 + values)) ** (_TRADING_DAYS / len(values)) - 1)
 
 
 def _half_life(decay: dict[int, float]) -> float:
@@ -586,18 +632,15 @@ def _half_life(decay: dict[int, float]) -> float:
 def _industry_ic(panel: pl.DataFrame, target: str) -> dict[str, float]:
     if "industry_l1" not in panel.columns:
         return {}
-    result = defaultdict(list)
-    groups = panel.group_by(["trade_date", "industry_l1"], maintain_order=True)
-    for (_, industry), group in groups:
-        if industry is not None:
-            ic = spearman_rank_ic(
-                numeric_column(group, "factor_value"),
-                numeric_column(group, target),
-                min_names=10,
-            )
-            if ic is not None:
-                result[industry].append(ic)
-    return {name: float(np.mean(values)) for name, values in sorted(result.items())}
+    daily = _rank_ic_by(panel, target, ["trade_date", "industry_l1"], 10).filter(
+        pl.col("industry_l1").is_not_null()
+    )
+    return dict(
+        daily.sort(["industry_l1", "trade_date"])
+        .group_by("industry_l1", maintain_order=True)
+        .agg(pl.col("_rank_ic").mean())
+        .iter_rows()
+    )
 
 
 def _paper_groups(
@@ -675,49 +718,53 @@ def _library_matrix(
         key: panel.select("_id", "trade_date", "factor_eligible", "factor_value")
         for key, panel in panels.items()
     }
+    observed = {label: panel["factor_value"].is_finite().sum() for label, panel in values.items()}
     for i, j in combinations(range(len(labels)), 2):
-        pair = (
-            values[labels[i]]
-            .join(
-                values[labels[j]].select("_id", "trade_date", pl.col("factor_value").alias("_peer")),
-                on=["_id", "trade_date"],
-                how="left",
-                validate="1:1",
-            )
-            .sort(["trade_date", "_id"])
+        if not observed[labels[i]] or not observed[labels[j]]:
+            continue
+        eligible = values[labels[i]].filter("factor_eligible")
+        paired = eligible.join(
+            values[labels[j]].select("_id", "trade_date", pl.col("factor_value").alias("_peer")),
+            on=["_id", "trade_date"],
+            how="left",
+            validate="1:1",
+            maintain_order="left",
         )
-        elig = pair["factor_eligible"].to_numpy()
-        left, right = numeric_column(pair, "factor_value"), numeric_column(pair, "_peer")
-        correlations = []
-        joint_names = 0
-        for rows in _date_sections(pair):
-            usable = rows[elig[rows]]
-            rho = _correlation(left[usable], right[usable], method, min_names=3)
-            if rho is not None:
-                correlations.append(rho)
-                joint_names += int((np.isfinite(left[usable]) & np.isfinite(right[usable])).sum())
-        if correlations:
-            signed[i, j] = signed[j, i] = np.mean(correlations)
-            absolute[i, j] = absolute[j, i] = np.mean(np.abs(correlations))
-            coverage[i, j] = coverage[j, i] = joint_names / elig.sum()
-    for i, panel in enumerate(panels.values()):
-        observed = np.isfinite(numeric_column(panel, "factor_value"))
-        if observed.any():
+        daily = (
+            paired.filter(pl.all_horizontal(pl.col("factor_value", "_peer").is_finite()))
+            .group_by("trade_date", maintain_order=True)
+            .agg(pl.len().alias("_n"), pl.corr("factor_value", "_peer", method=method).alias("_rho"))
+            .filter((pl.col("_n") >= 3) & pl.col("_rho").is_finite())
+            .with_columns(pl.col("_rho").clip(-1, 1))
+        )
+        if daily.height:
+            correlations = daily["_rho"]
+            signed[i, j] = signed[j, i] = correlations.mean()
+            absolute[i, j] = absolute[j, i] = correlations.abs().mean()
+            coverage[i, j] = coverage[j, i] = daily["_n"].sum() / eligible.height
+    for i, (label, panel) in enumerate(values.items()):
+        if observed[label]:
             signed[i, i] = absolute[i, i] = 1.0
-            coverage[i, i] = float(observed.sum() / panel["factor_eligible"].sum())
+            coverage[i, i] = float(observed[label] / panel["factor_eligible"].sum())
     return labels, signed, absolute, coverage
 
 
-def compute_factor_correlation(bars_df: pl.DataFrame, req: FactorCorrRequest) -> FactorCorrResult:
+def compute_factor_correlation(
+    bars_df: pl.DataFrame,
+    req: FactorCorrRequest,
+    custom_expressions: dict[str, str] | None = None,
+) -> FactorCorrResult:
     """Estimate per-date common-sample correlations of preprocessed library signals."""
-    if any(factor_id not in BUILTIN_FACTORS for factor_id in req.factor_ids):
-        unknown = sorted(set(req.factor_ids).difference(BUILTIN_FACTORS))
+    expressions = custom_expressions or {}
+    if unknown := sorted(set(req.factor_ids).difference(BUILTIN_FACTORS, expressions)):
         raise ValueError(f"Unknown factor IDs: {unknown}")
     config = PreprocessConfig()
     bars, style_columns = _with_styles(_prepare_bars(bars_df), config)
     panels = {}
     for factor_id in dict.fromkeys(req.factor_ids):
-        eval_request = FactorEvalRequest(factor_id=factor_id, preprocess=config)
+        eval_request = FactorEvalRequest(
+            factor_id=factor_id, expression=expressions.get(factor_id), preprocess=config
+        )
         panels[factor_id], _, _ = _compute_panel(bars, eval_request, style_columns, None)
     labels, signed, absolute, coverage = _library_matrix(panels, req.method)
     pairs = [
@@ -729,7 +776,7 @@ def compute_factor_correlation(bars_df: pl.DataFrame, req: FactorCorrRequest) ->
             "coverage_pct": float(coverage[i, j] * 100),
         }
         for i, j in combinations(range(len(labels)), 2)
-        if absolute[i, j] >= 0.70
+        if absolute[i, j] >= INSTITUTIONAL_GATES["max_corr_library"]
     ]
     return FactorCorrResult(
         universe_id=req.universe_id,
@@ -758,17 +805,18 @@ def _admission_checks(
     peer_coverage: dict[str, float] | None = None,
     spread: float = 0.0,
 ) -> list[dict]:
+    gates = INSTITUTIONAL_GATES
     coverage = diagnostics.coverage if diagnostics is not None else 0.0
-    evidence = coverage >= max(0.80, coverage_required) and mature_days >= _MIN_MATURE_DAYS
-    peers_available = bool(peer_coverage) and min(peer_coverage.values()) >= 0.80
+    evidence = coverage >= max(gates["min_coverage"], coverage_required) and mature_days >= _MIN_MATURE_DAYS
+    peers_available = bool(peer_coverage) and min(peer_coverage.values()) >= gates["min_coverage"]
     return [
         {
             "key": "rank_ic",
             "name": "RankIC",
             "value": rank_ic,
             "operator": ">=",
-            "threshold": 0.03,
-            "passed": evidence and rank_ic >= 0.03,
+            "threshold": gates["rank_ic_min"],
+            "passed": evidence and rank_ic >= gates["rank_ic_min"],
             "coverage_pct": coverage * 100,
             "mature_days": mature_days,
             "min_mature_days": _MIN_MATURE_DAYS,
@@ -779,16 +827,16 @@ def _admission_checks(
             "name": "年化 ICIR",
             "value": icir,
             "operator": ">=",
-            "threshold": 1.5,
-            "passed": evidence and icir >= 1.5,
+            "threshold": gates["icir_ann_min"],
+            "passed": evidence and icir >= gates["icir_ann_min"],
         },
         {
             "key": "nw_t_stat",
             "name": "Newey–West t",
             "value": hac,
             "operator": ">=",
-            "threshold": 3.0,
-            "passed": evidence and hac >= 3.0,
+            "threshold": gates["nw_t_stat_min"],
+            "passed": evidence and hac >= gates["nw_t_stat_min"],
             "bandwidth": bandwidth,
         },
         {
@@ -796,8 +844,8 @@ def _admission_checks(
             "name": "日均单边换手",
             "value": turnover,
             "operator": "<=",
-            "threshold": 0.15,
-            "passed": group_days >= _MIN_MATURE_DAYS and turnover <= 0.15,
+            "threshold": gates["daily_turnover_max"],
+            "passed": group_days >= _MIN_MATURE_DAYS and turnover <= gates["daily_turnover_max"],
             "decile_days": group_days,
             "basis": "Top decile plus cash, marked pretrade weights",
         },
@@ -806,8 +854,8 @@ def _admission_checks(
             "name": "库内最高相关",
             "value": correlation,
             "operator": "<",
-            "threshold": 0.70,
-            "passed": bool(peers_available and correlation < 0.70),
+            "threshold": gates["max_corr_library"],
+            "passed": bool(peers_available and correlation < gates["max_corr_library"]),
             "peer_common_coverage_pct": {
                 label: value * 100 for label, value in (peer_coverage or {}).items()
             },
@@ -817,8 +865,10 @@ def _admission_checks(
             "name": "分层单调性",
             "value": monotonicity,
             "operator": ">=",
-            "threshold": 0.90,
-            "passed": group_days >= _MIN_MATURE_DAYS and monotonicity >= 0.90 and spread > 0,
+            "threshold": gates["monotonicity_min"],
+            "passed": group_days >= _MIN_MATURE_DAYS
+            and monotonicity >= gates["monotonicity_min"]
+            and spread > 0,
             "top_minus_bottom_ann": spread,
             "basis": "Paper deciles, before execution costs",
         },
@@ -829,8 +879,19 @@ def evaluate_factor(
     bars_df: pl.DataFrame,
     req: FactorEvalRequest,
     pit_fin_df: pl.DataFrame | None = None,
+    *,
+    n_boot: int = 250,
+    check_prefix: bool = True,
+    prefix_cutoffs: Sequence[float] = (0.50,),
+    include_dimension_slices: bool = True,
 ) -> FactorEvalResult:
-    """Evaluate causal exposure, label alignment, cross-sectional IC and paper deciles."""
+    """Compute a factor tearsheet with optional bootstrap, prefix and regime diagnostics.
+
+    The synchronous tearsheet replays one cutoff by default. The formal proof
+    runs three and records per-cutoff evidence.
+    """
+    if type(n_boot) is not int or n_boot < 0:
+        raise ValueError("n_boot must be a non-negative integer")
     if not req.horizons or any(h < 1 for h in req.horizons):
         raise ValueError("FactorEvalRequest.horizons must contain positive trading-session counts")
     if req.expression is None and req.factor_id not in BUILTIN_FACTORS:
@@ -880,6 +941,20 @@ def evaluate_factor(
     bars = _cutoff(_prepare_bars(bars_df), req)
     bars, styles = _with_styles(bars, req.preprocess)
     panel, diagnostics, notes = _compute_panel(bars, req, styles, pit_fin_df)
+    has_signal = bool(panel["factor_value"].is_finite().any())
+    prefix = None
+    if check_prefix and has_signal:
+        from quant_core.validation.formal import _check_prefix_invariance
+
+        prefix = _check_prefix_invariance(
+            bars_df,
+            req,
+            cutoffs=prefix_cutoffs,
+            full_panel=panel,
+            financials_df=pit_fin_df,
+        )
+        if not prefix["n_compared"] and not prefix["witness_keys"]:
+            prefix = None
     warnings.extend(notes)
     horizons = tuple(sorted(set(_HORIZONS) | set(req.horizons)))
     horizon = req.horizons[0]
@@ -956,6 +1031,34 @@ def evaluate_factor(
         peer_coverage=joint_coverage,
         spread=annual[-1] - annual[0],
     )
+    statistical_fields = {}
+    if n_boot and (len(observed) or group_days):
+        from quant_core.validation.formal import stationary_block_bootstrap
+
+        statistical_fields["bootstrap_b"] = n_boot
+        if len(observed):
+            block = max(horizon, int(np.ceil(len(observed) ** (1 / 3))))
+            statistical_fields["rank_ic_ci95"] = stationary_block_bootstrap(
+                daily_ic, n_boot=n_boot, block_len=block
+            )["ci95"]
+            statistical_fields["icir_ci95"] = stationary_block_bootstrap(
+                daily_ic, n_boot=n_boot, block_len=block, stat_fn=_annualized_icir
+            )["ci95"]
+        if group_days:
+            last_session = bars["trade_date"].max()
+            nav = np.r_[1.0, navs["LS"]]
+            daily_ls = np.divide(nav[1:], nav[:-1], out=np.ones(len(dates)), where=nav[:-1] > 0) - 1
+            daily_ls = daily_ls[np.asarray([day != last_session for day in dates])]
+            statistical_fields["long_short_ci95"] = stationary_block_bootstrap(
+                daily_ls, n_boot=n_boot, stat_fn=_annualized_compound
+            )["ci95"]
+    dimension_slices = []
+    if include_dimension_slices and has_signal:
+        from quant_core.factors.regime import _factor_dimension_slices
+
+        dimension_slices = [
+            item.model_dump(mode="json") for item in _factor_dimension_slices(bars, panel, horizon)
+        ]
     return FactorEvalResult(
         **identity,
         ast_warnings=warnings,
@@ -984,4 +1087,8 @@ def evaluate_factor(
         industry_ic=_industry_ic(panel, f"_forward_{horizon}"),
         corr_matrix_labels=labels,
         corr_matrix_values=correlations.tolist(),
+        prefix_invariance_passed=prefix["passed"] if prefix is not None else None,
+        max_prefix_drift=prefix["max_drift"] if prefix is not None else None,
+        dimension_slices=dimension_slices,
+        **statistical_fields,
     )

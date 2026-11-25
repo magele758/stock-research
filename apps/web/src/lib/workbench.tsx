@@ -4,7 +4,9 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 import { usePathname } from 'next/navigation';
 import { DEFAULT_CONSTRAINTS, DEFAULT_EXPERIMENT_ID, DEFAULT_PREPROCESS, viewFromPath, type ViewKey } from './meta';
 import { quantApi, QuantApiError } from './quant-api';
-import type { ApiHealth, BacktestEngineMode, FactorDecayItem, OptConstraints, PreprocessConfig, UniverseId } from './types';
+import { isStudyRunning, researchApi, type StudyDraft } from './research-api';
+import type { TermQuery } from './glossary/types';
+import type { ApiHealth, BacktestEngineMode, FactorDecayItem, OptConstraints, PreprocessConfig, ResearchStudySummary, UniverseId } from './types';
 
 export type Theme = 'dark' | 'light';
 export type ConnState = 'checking' | 'online' | 'offline';
@@ -33,12 +35,24 @@ export interface AgentHomeStatus {
 }
 
 export type BotId = 'quant-lead' | 'alpha-miner' | 'risk-pm';
-export type QuickCmd = 'ic' | 'cpcv' | 'barra';
+export type QuickCmd = 'ic' | 'cpcv' | 'barra' | 'term' | 'study';
 
 export interface DockController {
   send: (text: string, opts?: { bot?: BotId }) => void;
   runCommand: (cmd: QuickCmd, opts?: { bot?: BotId }) => void;
   diagnoseFactor: (item: FactorDecayItem, context: { universe: string; shadowId: string; snapshotId: string }) => void;
+  /** Online: `<term_query>` message to Quant-Lead; offline: deterministic local term card. */
+  explainTerm: (q: TermQuery | string) => void;
+  /** Ask Quant-Lead to draft / review a study before dispatch (A2UI QuantStudyCard). */
+  dispatchStudy: (draft: StudyDraft) => void;
+}
+
+export interface ResearchPulse {
+  /** null = unknown yet, false = V3 research routes not deployed (404) or API offline. */
+  available: boolean | null;
+  running: number;
+  studies: ResearchStudySummary[];
+  checkedAt?: number;
 }
 
 export type ViewMetrics = Record<string, string | number | boolean | null>;
@@ -79,6 +93,15 @@ interface WorkbenchValue {
 
   metrics: Partial<Record<ViewKey, ViewMetrics>>;
   publishMetrics: (view: ViewKey, m: ViewMetrics | null) => void;
+
+  /** Selected study on /research (mirrors `?study=`). */
+  studyId: string | null;
+  setStudyId: (id: string | null) => void;
+  research: ResearchPulse;
+  refreshResearch: () => void;
+  /** Last term explained to the Bot (canvas `term_focus`). */
+  termFocus: TermQuery | null;
+  setTermFocus: (q: TermQuery | null) => void;
 
   registerDock: (c: DockController | null) => void;
   dock: DockController;
@@ -126,6 +149,10 @@ export function WorkbenchProvider({ children }: { children: ReactNode }) {
   const [apiNonce, setApiNonce] = useState(0);
   const [agentNonce, setAgentNonce] = useState(0);
   const [metrics, setMetrics] = useState<Partial<Record<ViewKey, ViewMetrics>>>({});
+  const [studyId, setStudyId] = useState<string | null>(null);
+  const [termFocus, setTermFocus] = useState<TermQuery | null>(null);
+  const [research, setResearch] = useState<ResearchPulse>({ available: null, running: 0, studies: [] });
+  const [researchNonce, setResearchNonce] = useState(0);
 
   useEffect(() => {
     const p = readPrefs();
@@ -201,6 +228,36 @@ export function WorkbenchProvider({ children }: { children: ReactNode }) {
     };
   }, [agentNonce]);
 
+  // research ledger pulse (SideNav running badge + /research tree); 404 = V3 routes absent → stop
+  const apiUp = api.state === 'online';
+  useEffect(() => {
+    if (!apiUp) {
+      setResearch((r) => (r.available === false && !r.studies.length ? r : { available: false, running: 0, studies: [] }));
+      return;
+    }
+    let stop = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const tick = async () => {
+      try {
+        const studies = await researchApi.studies({ limit: 200 });
+        if (stop) return;
+        const running = studies.filter((s) => isStudyRunning(s.status)).length;
+        setResearch({ available: true, running, studies, checkedAt: Date.now() });
+        timer = setTimeout(tick, running ? 6_000 : 20_000);
+      } catch (err) {
+        if (stop) return;
+        const missing = err instanceof QuantApiError && err.kind === 'http' && (err.status === 404 || err.status === 405 || err.status === 501);
+        setResearch((r) => ({ available: false, running: 0, studies: missing ? [] : r.studies, checkedAt: Date.now() }));
+        if (!missing) timer = setTimeout(tick, 20_000);
+      }
+    };
+    tick();
+    return () => {
+      stop = true;
+      if (timer) clearTimeout(timer);
+    };
+  }, [apiUp, researchNonce]);
+
   const setConstraints = useCallback((c: OptConstraints | ((prev: OptConstraints) => OptConstraints)) => {
     setConstraintsState(c);
   }, []);
@@ -241,7 +298,9 @@ export function WorkbenchProvider({ children }: { children: ReactNode }) {
     () => ({
       send: (text, opts) => withDock((c) => c.send(text, opts)),
       runCommand: (cmd, opts) => withDock((c) => c.runCommand(cmd, opts)),
-      diagnoseFactor: (item, context) => withDock((c) => c.diagnoseFactor(item, context))
+      diagnoseFactor: (item, context) => withDock((c) => c.diagnoseFactor(item, context)),
+      explainTerm: (q) => withDock((c) => c.explainTerm(q)),
+      dispatchStudy: (draft) => withDock((c) => c.dispatchStudy(draft))
     }),
     [withDock]
   );
@@ -282,6 +341,12 @@ export function WorkbenchProvider({ children }: { children: ReactNode }) {
     recheckAgent: () => setAgentNonce((n) => n + 1),
     metrics,
     publishMetrics,
+    studyId,
+    setStudyId,
+    research,
+    refreshResearch: () => setResearchNonce((n) => n + 1),
+    termFocus,
+    setTermFocus,
     registerDock,
     dock
   };

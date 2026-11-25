@@ -13,18 +13,35 @@ import { LineChart, type LineSeries } from '@/components/charts/LineChart';
 import { BarChart } from '@/components/charts/BarChart';
 import { Heatmap } from '@/components/charts/Heatmap';
 import { REGIME_BANDS } from '@/components/charts/core';
+import { TermTip } from '@/components/glossary/TermTip';
+import { DimensionMatrix } from '@/components/research/report/DimensionMatrix';
+import { openStudyDrawer } from '@/lib/glossary/store';
+import { GATES, judge, UI_LIMITS, verdictTone, withGate, type GateSpecKey } from '@/lib/thresholds';
+import { ci } from '@/lib/v3';
 
-/** Spec thresholds; overridden by the matching `gate_checks[].threshold` when the backend reports one. */
+/** Contract thresholds (`lib/thresholds`); overridden by the matching `gate_checks[].threshold` when the backend reports one. */
 const THRESHOLDS = {
-  rank_ic: 0.03,
-  icir_ann: 1.5,
-  nw_t_stat: 3,
-  daily_turnover_oneway: 0.2,
-  max_corr_in_library: 0.7
+  rank_ic: GATES.rank_ic_min,
+  icir_ann: GATES.icir_ann_min,
+  nw_t_stat: GATES.nw_t_stat_min,
+  daily_turnover_oneway: GATES.daily_turnover_max,
+  max_corr_in_library: GATES.max_corr_library
 } as const;
 type ThrKey = keyof typeof THRESHOLDS;
+const TERM_OF: Record<ThrKey, GateSpecKey> = { rank_ic: 'rank_ic', icir_ann: 'icir', nw_t_stat: 'nw_t_stat', daily_turnover_oneway: 'turnover_oneway', max_corr_in_library: 'max_corr_library' };
 
-const EXP_LIMIT = 0.3;
+const EXP_LIMIT = UI_LIMITS.residual_exposure_max;
+
+function CiRow({ v, d = 3, pctScale = false }: { v: unknown; d?: number; pctScale?: boolean }) {
+  const c = ci(v);
+  if (!c) return null;
+  const f = (x: number) => (pctScale ? `${fx(ratioPct(x) ?? NaN, 1)}%` : fx(x, d));
+  return (
+    <TermTip id="bootstrap_ci" as="span" className="ci" display={`[${f(c[0])}, ${f(c[1])}]`} context={{ excludes_zero: c[0] > 0 || c[1] < 0 }}>
+      95% CI [{f(c[0])}, {f(c[1])}]
+    </TermTip>
+  );
+}
 
 // ------------------------------------------------------------------ syntax highlight (port of prototype `hl`)
 
@@ -58,7 +75,7 @@ function hlLine(line: string): ReactNode[] {
 }
 
 function ExprEditor({ value, onChange, placeholder }: { value: string; onChange: (v: string) => void; placeholder: string }) {
-  const hlRef = useRef<HTMLPreElement>(null);
+  const hlRef = useRef<HTMLDivElement>(null);
   const gutRef = useRef<HTMLDivElement>(null);
   const lines = value.split('\n');
   return (
@@ -66,14 +83,15 @@ function ExprEditor({ value, onChange, placeholder }: { value: string; onChange:
       <div className="ed-gut">
         <div ref={gutRef}>{lines.map((_, i) => i + 1).join('\n')}</div>
       </div>
-      <pre ref={hlRef} className="ed-hl" aria-hidden>
+      {/* div, not <pre>: the HTML parser drops a leading newline inside <pre>, breaking hydration when the first line is empty */}
+      <div ref={hlRef} className="ed-hl" aria-hidden>
         {lines.map((l, i) => (
           <Fragment key={i}>
             {hlLine(l)}
             {'\n'}
           </Fragment>
         ))}
-      </pre>
+      </div>
       <textarea
         className="ed-ta"
         value={value}
@@ -103,7 +121,20 @@ function threshold(r: FactorEvalResult, key: ThrKey): number {
   return isNum(g?.threshold) ? g.threshold : THRESHOLDS[key];
 }
 
-const gt = (ok: boolean | null) => (ok === null ? <Tag tone="mute">N/A</Tag> : ok ? <Tag tone="pass">PASS</Tag> : <Tag tone="warn">WARN</Tag>);
+/** Contract gate (with backend threshold override) for a KPI; turnover is judged as a fraction. */
+function gateOf(r: FactorEvalResult, key: ThrKey) {
+  const t = threshold(r, key);
+  return withGate(TERM_OF[key], key === 'daily_turnover_oneway' ? (ratioPct(t) ?? NaN) / 100 : t);
+}
+function kpiValue(r: FactorEvalResult, key: ThrKey): number | null {
+  const v = key === 'rank_ic' ? r.rank_ic_mean : r[key];
+  if (!isNum(v)) return null;
+  return key === 'daily_turnover_oneway' ? (ratioPct(v) ?? NaN) / 100 : v;
+}
+function vt(r: FactorEvalResult, key: ThrKey) {
+  const j = judge(gateOf(r, key), kpiValue(r, key));
+  return <Tag tone={verdictTone(j.verdict)}>{j.verdict}</Tag>;
+}
 
 /** Align a series to the last `n` slots (pad front with NaN). */
 function tail(a: number[] | undefined, n: number): number[] {
@@ -169,16 +200,6 @@ export function AlphaView() {
   const checks = useMemo(() => (r ? normalizeGateChecks(r.gate_checks) : []), [r]);
   const nPass = checks.filter((c) => c.passed).length;
 
-  const G = r
-    ? {
-        ic: r.rank_ic_mean >= threshold(r, 'rank_ic'),
-        icir: r.icir_ann >= threshold(r, 'icir_ann'),
-        t: r.nw_t_stat >= threshold(r, 'nw_t_stat'),
-        to: (ratioPct(r.daily_turnover_oneway) ?? Infinity) <= (ratioPct(threshold(r, 'daily_turnover_oneway')) ?? 0),
-        mc: isNum(r.max_corr_in_library) ? r.max_corr_in_library < threshold(r, 'max_corr_in_library') : null
-      }
-    : null;
-
   usePublishMetrics(
     'alpha',
     r
@@ -210,6 +231,19 @@ export function AlphaView() {
     if (runExpr !== null) parts.push('自定义表达式');
     dock.send(parts.join(' · '));
   };
+
+  const deepDive = () =>
+    openStudyDrawer({
+      title: `${factorId} 因子深度研判`,
+      hypothesis: r
+        ? `${factorId} 在 ${uni.label} 的 RankIC ${fx(r.rank_ic_mean, 4)} / ICIR ${fx(r.icir_ann, 2)} / NW t ${fx(r.nw_t_stat, 2)}；需经形式化证明、CPCV 与跨维度切片确认其为稳定 Alpha 而非风格或单一 Regime 暴露。`
+        : `${factorId} 因子深度研判：形式化证明 + CPCV + 跨维度切片`,
+      kind: 'factor',
+      factor_id: factorId,
+      expression: (runExpr ?? baseExpr) || null,
+      universe_id: universe,
+      source: '/alpha'
+    });
 
   // ---------------------------------------------------------------- gate strip
   const warnings: [tone: 'warn' | 'fail', title: string, detail: string][] = [];
@@ -331,6 +365,10 @@ export function AlphaView() {
             <button type="button" className="btn" onClick={() => dock.runCommand('ic')}>
               Bot 解读
             </button>
+            <button type="button" className="btn" onClick={deepDive} title="以当前因子与表达式预填新研究，派发到集群">
+              <Icon name="research" size={11} />
+              派发集群深度研判此因子
+            </button>
             <button type="button" className="btn pri" onClick={submit}>
               <Icon name="shield" size={11} />
               提交入库门禁
@@ -347,22 +385,35 @@ export function AlphaView() {
             <ExprEditor value={text} onChange={setDraft} placeholder={apiOnline ? '# 表达式待 quant-api 返回' : '# API OFFLINE · 无法加载因子表达式'} />
             <div className="edm">
               <span>{lang}</span>
-              <span>PIT asof=ann_date</span>
+              <TermTip id="point_in_time" as="span">
+                PIT asof=ann_date
+              </TermTip>
               {r ? (
-                r.ast_safe ? (
-                  <Tag tone="pass">AST 无未来函数 · SAFE</Tag>
-                ) : (
-                  <Tag tone="fail" title={r.ast_warnings.join('\n')}>
-                    AST UNSAFE
-                  </Tag>
-                )
+                <TermTip id="ast_safe" as="span" display={r.ast_safe ? 'SAFE' : 'UNSAFE'} context={r.ast_warnings.length ? { warnings: r.ast_warnings.slice(0, 3).join(' · ') } : undefined}>
+                  {r.ast_safe ? (
+                    <Tag tone="pass">AST 无未来函数 · SAFE</Tag>
+                  ) : (
+                    <Tag tone="fail" title={r.ast_warnings.join('\n')}>
+                      AST UNSAFE
+                    </Tag>
+                  )}
+                </TermTip>
+              ) : null}
+              {r && typeof r.prefix_invariance_passed === 'boolean' ? (
+                <TermTip id="prefix_invariance" as="span" value={r.max_prefix_drift ?? null} display={isNum(r.max_prefix_drift) ? r.max_prefix_drift.toExponential(1) : undefined}>
+                  <Tag tone={r.prefix_invariance_passed ? 'pass' : 'fail'}>PREFIX {r.prefix_invariance_passed ? 'INVARIANT' : 'DRIFT'}</Tag>
+                </TermTip>
               ) : null}
               {r && r.ast_warnings.length ? (
                 <span className={r.ast_safe ? '' : 'c-up'} title={r.ast_warnings.join('\n')} style={{ overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 260 }}>
                   {r.ast_warnings.join(' · ')}
                 </span>
               ) : null}
-              {r ? <span>覆盖 {pct(r.coverage_pct, 1)}</span> : null}
+              {r ? (
+                <TermTip id="coverage" as="span" value={isNum(r.coverage_pct) ? (ratioPct(r.coverage_pct) ?? NaN) / 100 : null} display={pct(r.coverage_pct, 1)}>
+                  覆盖 {pct(r.coverage_pct, 1)}
+                </TermTip>
+              ) : null}
               {r?.dates.length ? <span>{r.dates.length} 日</span> : null}
               <span style={{ marginLeft: 'auto', display: 'flex', gap: 6, alignItems: 'center' }}>
                 <Prd id="Q2.1" />
@@ -410,7 +461,7 @@ export function AlphaView() {
               ))}
             </div>
             <div className="ttl" style={{ marginTop: 2 }}>
-              标准化
+              <TermTip id="zscore_rank">标准化</TermTip>
               <span style={{ marginLeft: 'auto' }}>
                 <Seg
                   value={preprocess.standardize}
@@ -423,7 +474,7 @@ export function AlphaView() {
               </span>
             </div>
             <div className="ttl" style={{ marginTop: 2 }}>
-              残余风格暴露 (σ)
+              <TermTip id="residual_exposure">残余风格暴露 (σ)</TermTip>
               <span style={{ marginLeft: 'auto', fontWeight: 400, letterSpacing: 0 }}>
                 {maxIndustryExposure !== null ? `行业(${industryExposures.length}) ≤${fx(maxIndustryExposure)}σ · ` : ''}阈值 ±{fx(EXP_LIMIT)}σ
               </span>
@@ -442,19 +493,73 @@ export function AlphaView() {
       </section>
 
       <div className="kpis k8">
-        <Kpi label="RankIC 均值" value={r ? fx(r.rank_ic_mean, 4) : '—'} sub={r && G ? <>{gt(G.ic)}<span>σ {fx(r.ic_std, 3)}</span></> : undefined} />
-        <Kpi label="ICIR 年化" value={r ? fx(r.icir_ann, 2) : '—'} sub={r && G ? <>{gt(G.icir)}<span>胜率 {pct(ratioPct(r.ic_win_rate), 0)}</span></> : undefined} />
-        <Kpi label="NW t-stat" value={r ? fx(r.nw_t_stat, 2) : '—'} sub={r && G ? <>{gt(G.t)}<span>Newey–West</span></> : undefined} />
-        <Kpi label="多空年化收益" value={r ? spct(lsPct, 1) : '—'} sub={r ? <span>Q10−Q1</span> : undefined} />
-        <Kpi label="Top 组超额年化" value={r ? spct(ratioPct(r.top_excess_ann), 1) : '—'} sub={r ? <span>vs 等权</span> : undefined} />
         <Kpi
-          label="单边日换手率"
-          value={r ? pct(ratioPct(r.daily_turnover_oneway), 1) : '—'}
-          sub={r && G ? <>{gt(G.to)}<span>≤{pct(ratioPct(threshold(r, 'daily_turnover_oneway')), 0)}</span></> : undefined}
+          label={<TermTip id="rank_ic" value={r ? r.rank_ic_mean : null} gate={r ? gateOf(r, 'rank_ic') : undefined} context={r ? { ic_std: r.ic_std } : undefined}>RankIC 均值</TermTip>}
+          value={r ? fx(r.rank_ic_mean, 4) : '—'}
+          sub={r ? <>{vt(r, 'rank_ic')}<span>σ {fx(r.ic_std, 3)}</span></> : undefined}
         />
-        <Kpi label="IC 半衰期" value={r ? `${fx(r.half_life_days, 1)}D` : '—'} sub={r ? <span>指数衰减拟合</span> : undefined} />
-        <Kpi label="库内 MaxCorr" value={r ? fx(r.max_corr_in_library, 2) : '—'} sub={r && G ? <>{gt(G.mc)}<span>{r.max_corr_peer || '—'}</span></> : undefined} />
+        <Kpi
+          label={<TermTip id="icir" value={r ? r.icir_ann : null} gate={r ? gateOf(r, 'icir_ann') : undefined}>ICIR 年化</TermTip>}
+          value={r ? fx(r.icir_ann, 2) : '—'}
+          sub={r ? <>{vt(r, 'icir_ann')}<TermTip id="ic_win_rate" as="span" value={isNum(r.ic_win_rate) ? (ratioPct(r.ic_win_rate) ?? NaN) / 100 : null}>胜率 {pct(ratioPct(r.ic_win_rate), 0)}</TermTip></> : undefined}
+        />
+        <Kpi
+          label={<TermTip id="nw_t_stat" value={r ? r.nw_t_stat : null} gate={r ? gateOf(r, 'nw_t_stat') : undefined}>NW t-stat</TermTip>}
+          value={r ? fx(r.nw_t_stat, 2) : '—'}
+          sub={r ? <>{vt(r, 'nw_t_stat')}<TermTip id="newey_west_hac" as="span">Newey–West</TermTip></> : undefined}
+        />
+        <Kpi label={<TermTip id="long_short" value={lsPct} display={spct(lsPct, 1)}>多空年化收益</TermTip>} value={r ? spct(lsPct, 1) : '—'} sub={r ? <span>Q10−Q1</span> : undefined} />
+        <Kpi label={<TermTip id="top_excess" value={r ? ratioPct(r.top_excess_ann) : null} display={r ? spct(ratioPct(r.top_excess_ann), 1) : undefined}>Top 组超额年化</TermTip>} value={r ? spct(ratioPct(r.top_excess_ann), 1) : '—'} sub={r ? <span>vs 等权</span> : undefined} />
+        <Kpi
+          label={<TermTip id="turnover_oneway" value={r ? kpiValue(r, 'daily_turnover_oneway') : null} gate={r ? gateOf(r, 'daily_turnover_oneway') : undefined}>单边日换手率</TermTip>}
+          value={r ? pct(ratioPct(r.daily_turnover_oneway), 1) : '—'}
+          sub={r ? <>{vt(r, 'daily_turnover_oneway')}<span>≤{pct(ratioPct(threshold(r, 'daily_turnover_oneway')), 0)}</span></> : undefined}
+        />
+        <Kpi label={<TermTip id="half_life" value={r ? r.half_life_days : null} display={r ? `${fx(r.half_life_days, 1)}D` : undefined}>IC 半衰期</TermTip>} value={r ? `${fx(r.half_life_days, 1)}D` : '—'} sub={r ? <span>指数衰减拟合</span> : undefined} />
+        <Kpi
+          label={<TermTip id="max_corr_library" value={r ? r.max_corr_in_library : null} gate={r ? gateOf(r, 'max_corr_in_library') : undefined} context={r ? { peer: r.max_corr_peer } : undefined}>库内 MaxCorr</TermTip>}
+          value={r ? fx(r.max_corr_in_library, 2) : '—'}
+          sub={r ? <>{vt(r, 'max_corr_in_library')}<span>{r.max_corr_peer || '—'}</span></> : undefined}
+        />
       </div>
+      {r && (ci(r.rank_ic_ci95) || ci(r.icir_ci95) || ci(r.long_short_ci95)) ? (
+        <div
+          style={{
+            marginTop: 0,
+            border: '1px solid var(--line)',
+            borderTop: 0,
+            background: 'var(--bg1)',
+            padding: '5px 10px',
+            display: 'flex',
+            flexWrap: 'wrap',
+            alignItems: 'center',
+            gap: '6px 16px',
+            fontSize: 10.5
+          }}
+        >
+          {ci(r.rank_ic_ci95) ? (
+            <span className="mono" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: 'var(--tx2)' }}>
+              <span className="c-3">RankIC</span>
+              <CiRow v={r.rank_ic_ci95} d={4} />
+            </span>
+          ) : null}
+          {ci(r.icir_ci95) ? (
+            <span className="mono" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: 'var(--tx2)' }}>
+              <span className="c-3">ICIR</span>
+              <CiRow v={r.icir_ci95} d={2} />
+            </span>
+          ) : null}
+          {ci(r.long_short_ci95) ? (
+            <span className="mono" style={{ display: 'inline-flex', alignItems: 'center', gap: 5, color: 'var(--tx2)' }}>
+              <span className="c-3">多空年化</span>
+              <CiRow v={r.long_short_ci95} pctScale />
+            </span>
+          ) : null}
+          <span className="ci" style={{ marginLeft: 'auto' }}>
+            Stationary Bootstrap · 区间不含 0 方可视为显著
+          </span>
+        </div>
+      ) : null}
 
       <div className="gstrip">
         {r ? (
@@ -489,13 +594,15 @@ export function AlphaView() {
 
       <div className="g2">
         <Panel
-          title="10 分层单调性净值 · Q1–Q10 + 多空"
+          title={<TermTip id="monotonicity">10 分层单调性净值 · Q1–Q10 + 多空</TermTip>}
           prd="Q2.3"
           busy={busy}
           tools={
             r ? (
               <>
-                <Tag tone="info">单调性 ρ={fx(r.monotonicity_spearman)}</Tag>
+                <TermTip id="monotonicity" as="span" value={r.monotonicity_spearman}>
+                  <Tag tone={verdictTone(judge(withGate('monotonicity', undefined), r.monotonicity_spearman).verdict)}>单调性 ρ={fx(r.monotonicity_spearman)}</Tag>
+                </TermTip>
                 <Tag tone="mute">L/S {spct(lsPct, 1)}/yr</Tag>
               </>
             ) : null
@@ -538,7 +645,7 @@ export function AlphaView() {
         </Panel>
 
         <Panel
-          title="滚动 60D RankIC · 累计 IC"
+          title={<TermTip id="rank_ic">滚动 60D RankIC · 累计 IC</TermTip>}
           prd="Q2.3"
           busy={busy}
           tools={
@@ -584,7 +691,7 @@ export function AlphaView() {
         </Panel>
 
         <Panel
-          title={alt === 'lag' ? `IC 滞后衰减 · Lag ${charts?.lag.map(([k]) => k).join('/') || '—'}` : '分行业 RankIC'}
+          title={<TermTip id={alt === 'lag' ? 'ic_decay' : 'industry_neutral'}>{alt === 'lag' ? `IC 滞后衰减 · Lag ${charts?.lag.map(([k]) => k).join('/') || '—'}` : '分行业 RankIC'}</TermTip>}
           prd="Q2.3"
           busy={busy}
           tools={
@@ -636,7 +743,7 @@ export function AlphaView() {
         </Panel>
 
         <Panel
-          title={`因子库相关性矩阵${r?.corr_matrix_labels.length ? ` · ${r.corr_matrix_labels.length}×${r.corr_matrix_labels.length}` : ''}`}
+          title={<TermTip id="max_corr_library">{`因子库相关性矩阵${r?.corr_matrix_labels.length ? ` · ${r.corr_matrix_labels.length}×${r.corr_matrix_labels.length}` : ''}`}</TermTip>}
           prd="Q2.3"
           busy={busy}
           tools={
@@ -662,6 +769,8 @@ export function AlphaView() {
           </DataSlot>
         </Panel>
       </div>
+
+      <DimensionMatrix slices={r?.dimension_slices} title="维度切片稳定性矩阵" height={96} />
     </div>
   );
 }

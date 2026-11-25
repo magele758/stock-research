@@ -18,21 +18,31 @@ export function verdictTag(e: Pick<ExperimentRecord, 'verdict' | 'status_badge'>
 }
 
 export function SideNav() {
-  const { view, apiOnline, api, experimentId, setExperimentId, universe } = useWorkbench();
+  const { view, apiOnline, api, experimentId, setExperimentId, universe, research } = useWorkbench();
   const router = useRouter();
   const exps = useApi(apiOnline ? `nav-exps:${api.health?.snapshot_id ?? ''}` : null, (s) => quantApi.experiments(20, s));
   return (
     <nav className="nav">
       <div className="nsec">
         <span>WORKSPACE</span>
-        <span>06</span>
+        <span>{String(VIEWS.length).padStart(2, '0')}</span>
       </div>
       {VIEWS.map((v) => (
         <Link key={v.key} href={v.path} className={`ni ${view === v.key ? 'on' : ''}`}>
           <Icon name={v.icon} size={16} />
           <b>{v.label}</b>
           <small>{v.path}</small>
-          <em>{v.prd}</em>
+          {v.key === 'research' && research.running > 0 ? (
+            <span className="nbadge">
+              <em style={{ gridRow: 'auto' }}>{v.prd}</em>
+              <span className="run-b" title={`${research.running} 个研究运行中`}>
+                <i />
+                {research.running} RUN
+              </span>
+            </span>
+          ) : (
+            <em>{v.prd}</em>
+          )}
         </Link>
       ))}
       <div className="nsec" style={{ marginTop: 8, borderTop: '1px solid var(--line)', paddingTop: 10 }}>

@@ -1,5 +1,5 @@
 #!/usr/bin/env node
-// Zero-intrusion Agent Home registration for Pro-Quant V2.0.
+// Zero-intrusion Agent Home registration for Pro-Quant V3.0.
 //
 // Creates / verifies the permanent `quant-lead` Bot via the Agent Home daemon
 // REST API (GET/POST/PATCH /api/bots) and prints the exact env snippet and
@@ -24,16 +24,19 @@ const PORTS_FILE =
 
 const BOT_ID = 'quant-lead';
 const BOT_TITLE = '量化主研 Pro-Quant';
-// Agent Home caps description at 2000 chars (BOT_DESCRIPTION_MAX).
+// Agent Home caps description at 2000 chars (BOT_DESCRIPTION_MAX); asserted below.
+const BOT_SKILL_REL = 'services/quant-mcp/skills/quant-lead/SKILL.md';
 const BOT_DESCRIPTION = [
-  '你是永久量化主研助手 quant-lead，服务 A 股/美股机构级量化研究。',
-  '职责：通过 quant_* MCP 工具做因子检验、CPCV/DSR 过拟合门禁、Barra CNE6 风险暴露、cvxpy 组合优化、A 股微结构回测归因与影子盘漂移监控。',
-  '铁律：(1) 只引用工具返回的数值，结论必须带 snapshot_id 与 as_of，不得凭记忆编造指标；(2) 零荐股：只输出统计学指标、因子暴露、样本外验证与漂移分析，绝不给出买卖建议或收益承诺，系统无任何下单能力；',
-  '(3) 耗时工具(quant_run_backtest/quant_run_cpcv_gate/quant_submit_factor_hypothesis)优先 async_mode=true，拿到 job_id 后用 wait_for 或轮询，禁止同步阻塞超过 20s；(4) 工具大结果只看摘要与 artifact uri，不要要求灌入全表。',
-  '防重复试错记忆约定：每次因子被 CPCV 门禁判 reject/inconclusive 或被相关性淘汰，立即写入 project.memory 的「已证伪因子墓碑库」，格式 `[FALSIFIED] factor_id | expr_hash | 原因 | DSR/PBO/OOS-IS | snapshot_id | 日期`；提出新假设前先检索该墓碑库与 quant_list_experiments，同质表达式不得重复提交。',
-  '用户偏好（股票池、换手上限、行业/风格偏离容忍度）写入 user.memory；当前研究主线写 session.long。',
-  `详细 Runbook 见 Skill: ${SKILL_PATH}`,
+  '你是永久量化主研助手 quant-lead（Pro-Quant V3.0），服务 A 股/美股机构级量化研究，通过 21 个 quant_* MCP 工具工作：因子检验、CPCV/DSR、形式化证明(quant_formal_verify)、跨维度 Regime(quant_regime_analysis)、AUM 容量(quant_capacity_analysis)、Barra/cvxpy、微结构回测归因、影子盘漂移、术语百科(quant_glossary_lookup)、研究课题总账与集群调度(quant_dispatch_research/quant_get_research_study/quant_list_research_studies/quant_publish_research_finding)。',
+  '铁律：(1) 只引用工具返回数值，结论必带 snapshot_id 与 as_of，不得凭记忆编造指标；(2) 零荐股：只输出统计指标、暴露、样本外验证与漂移分析，绝无买卖建议或收益承诺，系统无任何下单能力；(3) 入库以 INSTITUTIONAL_GATES 为准(RankIC≥0.03, ICIR≥1.5, NW t≥3, 换手≤15%, 库内相关<0.7, DSR≥0.95, PBO≤0.25, BH-FDR q≤0.05)，proof 未全过严禁标 VERIFIED；(4) 耗时工具(backtest/cpcv/formal_verify/dispatch)优先 async_mode=true，拿 job_id 或 study_id 轮询，单次不阻塞超过 20s；(5) 大结果只看摘要与 artifact uri。',
+  '数学铁律：推演必须给出经济假设、公式、假设与边界条件，数值只来自 formal_verify 证明链，严禁臆想；解读术语先 quant_glossary_lookup，再结合实时指标对照门槛。',
+  '集群调度：研究派发前先查 quant_list_research_studies(view=tombstones/lineage) 防重复并挂 parent_study_id；外部 Worker 产出一律经 quant_publish_research_finding 由服务端零信任复算，worker_claimed_metrics 只是声明。',
+  '记忆约定：被证伪/拒绝的因子写 project.memory 墓碑库 `[FALSIFIED] factor_id | expr_hash | 原因 | 指标 | snapshot_id | 日期`；用户偏好写 user.memory；研究主线写 session.long。',
+  `详细 Runbook 见仓库内 Skill: ${BOT_SKILL_REL}`,
 ].join('\n');
+if (BOT_DESCRIPTION.length > 2000) {
+  throw new Error(`BOT_DESCRIPTION is ${BOT_DESCRIPTION.length} chars; Agent Home allows at most 2000`);
+}
 
 function parseArgs(argv) {
   const out = { dryRun: false, json: false, daemonUrl: null, mcpUrl: null, bearerEnv: null, help: false };

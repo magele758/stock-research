@@ -7,13 +7,15 @@ from typing import Any, Literal
 
 from fastapi import APIRouter, Header, Query
 from fastapi.responses import StreamingResponse
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 from quant_core.schemas import (
     AsyncJobRecord,
     BacktestRequest,
     BacktestResult,
     BarraExposureRequest,
     BarraExposureResult,
+    CapacityAnalysisRequest,
+    CapacityFrontierResult,
     CpcvRequest,
     CpcvResult,
     DataHealthReport,
@@ -25,8 +27,18 @@ from quant_core.schemas import (
     FactorEvalResult,
     FactorHypothesisRequest,
     FactorHypothesisResult,
+    FormalProofResult,
+    FormalVerifyRequest,
+    GlossaryListResponse,
+    GlossaryTerm,
     PortfolioOptRequest,
     PortfolioOptResult,
+    PublishFindingRequest,
+    RegimeAnalysisRequest,
+    RegimeAnalysisResult,
+    ResearchDispatchRequest,
+    ResearchDispatchResponse,
+    ResearchStudyDetail,
     ShadowDriftRequest,
     ShadowDriftResult,
 )
@@ -42,6 +54,22 @@ class SyncRequest(BaseModel):
 
     provider: Literal["tushare", "baostock", "edgar"]
     mode: Literal["check", "incremental"] = "check"
+
+
+class TombstoneCreateRequest(BaseModel):
+    """Record a falsified expression in the tombstone library (dedupe guard for future studies)."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    factor_id: str
+    expression: str
+    universe_id: str = "CSI500"
+    snapshot_id: str | None = None
+    failure_code: str
+    failure_metrics: dict[str, Any] = Field(default_factory=dict)
+    lesson_summary: str = ""
+    study_id: str | None = None
+    created_by: str = "quant-lead"
 
 
 # -- Q1 ----------------------------------------------------------------------
@@ -194,3 +222,125 @@ def jobs_events(job_id: str) -> StreamingResponse:
 @router.get("/mcp/catalog", tags=["mcp"])
 def mcp_catalog() -> dict[str, Any]:
     return service.mcp_catalog()
+
+
+# -- V3.0 Q8 glossary (no snapshot dependency) -----------------------------------------------------
+
+
+@router.get("/glossary", response_model=GlossaryListResponse, tags=["glossary"])
+def glossary_list(
+    category: str | None = Query(None), domain: str | None = Query(None), q: str | None = Query(None)
+) -> GlossaryListResponse:
+    return service.glossary_list(category, domain, q)
+
+
+@router.get("/glossary/{term_id}", response_model=GlossaryTerm, tags=["glossary"])
+def glossary_get(term_id: str) -> GlossaryTerm:
+    return service.glossary_get(term_id)
+
+
+# -- V3.0 formal verification / regime / capacity ----------------------------------------------------
+
+
+@router.post(
+    "/validation/formal-verify",
+    response_model=FormalProofResult | AsyncJobRecord,
+    tags=["validation"],
+)
+def validation_formal_verify(
+    req: FormalVerifyRequest, async_mode: bool = Query(False)
+) -> FormalProofResult | AsyncJobRecord:
+    if async_mode:
+        return service.enqueue_formal_verify(req)
+    return service.formal_verify(req)
+
+
+@router.post("/factors/regime-analysis", response_model=RegimeAnalysisResult, tags=["factors"])
+def factors_regime_analysis(req: RegimeAnalysisRequest) -> RegimeAnalysisResult:
+    return service.regime_analysis(req)
+
+
+@router.post("/portfolio/capacity", response_model=CapacityFrontierResult, tags=["risk"])
+def portfolio_capacity(req: CapacityAnalysisRequest) -> CapacityFrontierResult:
+    return service.capacity(req)
+
+
+# -- V3.0 Q7 research ledger / cluster orchestrator ----------------------------------------------------
+
+
+@router.get("/research/studies", tags=["research"])
+def research_studies(
+    status: str | None = Query(None),
+    verdict: str | None = Query(None),
+    family_id: str | None = Query(None),
+    parent_study_id: str | None = Query(None),
+    q: str | None = Query(None),
+    limit: int = Query(50, ge=1, le=500),
+) -> dict[str, Any]:
+    return service.research_list_studies(status, verdict, family_id, parent_study_id, q, limit)
+
+
+@router.post("/research/dispatch", response_model=ResearchDispatchResponse, tags=["research"])
+@router.post("/research/studies", response_model=ResearchDispatchResponse, tags=["research"])
+def research_dispatch(
+    req: ResearchDispatchRequest,
+    async_mode: bool = Query(True),
+    idempotency_key: str | None = Header(None),
+) -> ResearchDispatchResponse:
+    return service.research_dispatch(req, async_mode, idempotency_key)
+
+
+@router.get("/research/studies/{study_id}", response_model=ResearchStudyDetail, tags=["research"])
+def research_study_get(study_id: str) -> ResearchStudyDetail:
+    return service.research_get_study(study_id)
+
+
+@router.get("/research/studies/{study_id}/events", tags=["research"])
+def research_study_events(
+    study_id: str, after_seq: int = Query(0, ge=0), last_event_id: str | None = Header(None)
+) -> StreamingResponse:
+    service.research_get_study(study_id)  # 404 early
+    if last_event_id and last_event_id.strip().isdigit():
+        after_seq = max(after_seq, int(last_event_id.strip()))
+    return StreamingResponse(
+        service.research_event_stream(study_id, after_seq),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@router.get("/research/studies/{study_id}/memo", tags=["research"])
+def research_study_memo(study_id: str) -> dict[str, Any]:
+    return service.research_memo(study_id)
+
+
+@router.post("/research/studies/{study_id}/publish", response_model=ResearchStudyDetail, tags=["research"])
+def research_study_publish(study_id: str, req: PublishFindingRequest) -> ResearchStudyDetail:
+    return service.research_publish(study_id, req)
+
+
+@router.get("/research/baselines", tags=["research"])
+def research_baselines_get(snapshot_id: str | None = Query(None), universe_id: str = Query("CSI500")) -> dict[str, Any]:
+    return service.research_baselines(snapshot_id, universe_id)
+
+
+@router.post("/research/baselines", tags=["research"])
+def research_baselines_build(snapshot_id: str | None = Query(None), universe_id: str = Query("CSI500")) -> dict[str, Any]:
+    return service.research_baselines(snapshot_id, universe_id, build=True)
+
+
+@router.get("/research/tombstones", tags=["research"])
+def research_tombstones_get(
+    q: str | None = Query(None), expr_hash: str | None = Query(None), limit: int = Query(50, ge=1, le=500)
+) -> dict[str, Any]:
+    return service.research_tombstones(q, expr_hash, limit)
+
+
+@router.post("/research/tombstones", tags=["research"])
+def research_tombstones_add(req: TombstoneCreateRequest) -> dict[str, Any]:
+    return service.research_add_tombstone(**req.model_dump())
+
+
+@router.get("/research/clusters", tags=["research"])
+def research_clusters(probe_health: bool = Query(False)) -> dict[str, Any]:
+    return service.research_clusters(probe_health)

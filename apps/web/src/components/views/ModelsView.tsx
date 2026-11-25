@@ -1,20 +1,161 @@
 'use client';
 
-import { useEffect, useMemo, type ReactNode } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import { quantApi, normalizeGateChecks } from '@/lib/quant-api';
 import { useApi } from '@/lib/use-api';
 import { usePublishMetrics, useWorkbench } from '@/lib/workbench';
 import { universeMeta } from '@/lib/meta';
 import { clamp, fmtMs, fx, isNum, mean, pct, ratioPct, spct } from '@/lib/format';
+import { GATES, GATE_SPECS, judge, verdictTone, type Verdict } from '@/lib/thresholds';
 import type { CpcvResult, ExperimentRecord, GateVerdict } from '@/lib/types';
-import { ApiNotice, DataSlot, EmptyState, Kpi, Panel, SolveMeta, Tag, ViewHeader, triTone, type Tone } from '@/components/ui';
+import { neighborDropPct, normFdr, normParamSensitivity, type ParamCurve } from '@/lib/v3';
+import { ApiNotice, DataSlot, EmptyState, Kpi, Panel, Seg, SolveMeta, Tag, ViewHeader, triTone, type Tone } from '@/components/ui';
 import { Icon } from '@/components/icons';
 import { CpcvHistogram } from '@/components/charts/CpcvHistogram';
+import { XYChart } from '@/components/charts/XYChart';
 import { normalizeFolds, WalkForward } from '@/components/charts/WalkForward';
+import { TermTip } from '@/components/glossary/TermTip';
 
-const PBO_MAX = 0.25;
-const DSR_MIN = 0.95;
-const OOS_IS_MIN = 0.5;
+const PBO_MAX = GATES.cpcv_pbo_max;
+const DSR_MIN = GATES.dsr_min;
+const OOS_IS_MIN = GATES.oos_is_ratio_min;
+const FDR_Q = GATES.bh_fdr_q_max;
+const CLIFF_MAX = GATES.param_cliff_drop_max;
+
+/** Worst neighbour drop (percent) across all returned parameter curves. */
+function worstCliff(curves: ParamCurve[]): { param: string; drop: number } | null {
+  let best: { param: string; drop: number } | null = null;
+  for (const c of curves) {
+    const d = neighborDropPct(c);
+    if (d !== null && (!best || d > best.drop)) best = { param: c.param, drop: d };
+  }
+  return best;
+}
+
+function FdrCard({ c }: { c: CpcvResult | undefined }) {
+  const rows = useMemo(() => normFdr(c?.fdr_items), [c]);
+  const sorted = useMemo(() => rows.filter((r) => r.p !== null).sort((a, b) => (a.p as number) - (b.p as number)), [rows]);
+  const m = sorted.length;
+  const q = c?.fdr_q_value ?? null;
+  const spa = c?.spa_p_value ?? null;
+  const qv = judge(GATE_SPECS.bh_fdr, q);
+  const sv = judge(GATE_SPECS.hansen_spa, spa);
+  return (
+    <Panel
+      title={<TermTip id="bh_fdr">BH-FDR 多重检验校正</TermTip>}
+      prd="MATH"
+      sub={m ? `M = ${m} 个候选 · α = ${fx(FDR_Q)}` : undefined}
+      tools={
+        <>
+          {q !== null ? (
+            <TermTip id="bh_fdr" as="span" value={q}>
+              <Tag tone={verdictTone(qv.verdict)}>q {fx(q, 3)}</Tag>
+            </TermTip>
+          ) : null}
+          {spa !== null ? (
+            <TermTip id="hansen_spa" as="span" value={spa}>
+              <Tag tone={verdictTone(sv.verdict)}>SPA p {fx(spa, 3)}</Tag>
+            </TermTip>
+          ) : null}
+        </>
+      }
+    >
+      {!m && q === null ? (
+        <EmptyState height={190} title="BH-FDR · 后端未返回" detail="需 V3 CPCV 返回 fdr_items / fdr_q_value（同批候选的 p 值与 BH 校正 q 值）" />
+      ) : (
+        <>
+          {m ? (
+            <XYChart
+              height={120}
+              series={[
+                { name: 'p 值（升序）', color: 'var(--sig)', x: sorted.map((_, i) => i + 1), y: sorted.map((r) => r.p as number), scatter: true, fmt: (v) => fx(v, 4) },
+                { name: 'BH 临界线 α·k/M', color: 'var(--warn)', x: sorted.map((_, i) => i + 1), y: sorted.map((_, i) => (FDR_Q * (i + 1)) / m), dash: true, fmt: (v) => fx(v, 4) }
+              ]}
+              xFmt={(v) => `#${fx(v, 0)}`}
+              yFmt={(v) => fx(v, 3)}
+              xLabel="rank k"
+              yLabel="p"
+            />
+          ) : null}
+          <table className="tbl dense compact" style={{ marginTop: 6 }}>
+            <thead>
+              <tr>
+                <th className="n">k</th>
+                <th>候选</th>
+                <th className="n">p</th>
+                <th className="n">BH q</th>
+                <th>判定</th>
+              </tr>
+            </thead>
+            <tbody>
+              {sorted.slice(0, 8).map((r, i) => {
+                const rej = r.rejected ?? (r.q !== null ? r.q <= FDR_Q : null);
+                return (
+                  <tr key={r.id}>
+                    <td className="n c-3">{r.rank ?? i + 1}</td>
+                    <td className="mono" title={r.label}>
+                      {r.label}
+                    </td>
+                    <td className="n">{r.p !== null ? fx(r.p, 4) : '—'}</td>
+                    <td className={`n ${rej === false ? 'c-up' : ''}`}>{r.q !== null ? fx(r.q, 4) : '—'}</td>
+                    <td>{rej === null ? <Tag tone="mute">N/A</Tag> : rej ? <Tag tone="pass">显著</Tag> : <Tag tone="fail">不显著</Tag>}</td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+          {m > 8 ? <div className="ci" style={{ marginTop: 4 }}>仅列 p 值最小的 8 个 · 共 {m}</div> : null}
+        </>
+      )}
+    </Panel>
+  );
+}
+
+function ParamCliffCard({ c }: { c: CpcvResult | undefined }) {
+  const curves = useMemo(() => normParamSensitivity(c?.param_sensitivity), [c]);
+  const [param, setParam] = useState<string | null>(null);
+  const cur = curves.find((x) => x.param === param) ?? curves[0];
+  const drop = cur ? neighborDropPct(cur) : null;
+  const jv = judge(GATE_SPECS.param_cliff, drop !== null ? drop / 100 : null);
+  return (
+    <Panel
+      title={<TermTip id="param_cliff">参数悬崖 · 邻点敏感性</TermTip>}
+      prd="MATH"
+      sub={cur && curves.length <= 1 ? `${cur.param} · ${cur.metricName}` : undefined}
+      tools={
+        <>
+          {curves.length > 1 ? <Seg value={cur?.param ?? ''} options={curves.slice(0, 4).map((x) => ({ key: x.param, label: x.param }))} onChange={setParam} /> : null}
+          {drop !== null ? (
+            <TermTip id="param_cliff" as="span" value={drop / 100} display={`${fx(drop, 1)}%`}>
+              <Tag tone={verdictTone(jv.verdict)}>邻点衰减 {fx(drop, 0)}%</Tag>
+            </TermTip>
+          ) : null}
+        </>
+      }
+    >
+      {!cur ? (
+        <EmptyState height={190} title="PARAM SENSITIVITY · 后端未返回" detail="需 V3 CPCV 返回 param_sensitivity（参数网格与对应 OOS 指标）" />
+      ) : (
+        <>
+          <XYChart
+            height={170}
+            series={[{ name: cur.metricName, color: 'var(--sig)', x: cur.values, y: cur.metric, fmt: (v) => fx(v, 3) }]}
+            xFmt={(v) => fx(v, Math.abs(v) < 1 ? 2 : 0)}
+            yFmt={(v) => fx(v, 2)}
+            xLabel={cur.param}
+            yLabel={cur.metricName}
+            zeroLine
+            marks={cur.selected !== null ? [{ x: cur.values[cur.selected], y: cur.metric[cur.selected], label: '选定参数', color: jv.verdict === 'FAIL' ? 'var(--up)' : 'var(--sig)' }] : []}
+            hlines={cur.selected !== null && Number.isFinite(cur.metric[cur.selected]) ? [{ y: cur.metric[cur.selected] * (1 - CLIFF_MAX), label: `-${fx(CLIFF_MAX * 100, 0)}% 红线`, color: 'var(--warn)' }] : []}
+          />
+          <div className="ci" style={{ marginTop: 4 }}>
+            {jv.verdict === 'FAIL' ? '选定点处于悬崖边缘：邻近参数指标骤降，结果疑似被调参挑选' : drop !== null ? '邻近参数表现平滑，未见悬崖' : '未标注选定参数，无法计算邻点衰减'}
+          </div>
+        </>
+      )}
+    </Panel>
+  );
+}
 
 function badgeTone(badge: string | undefined, verdict: GateVerdict | undefined): Tone {
   const b = (badge ?? '').toUpperCase();
@@ -42,13 +183,14 @@ function GateRow({ x, on, val, max, thr, bad }: { x: ExperimentRecord; on: boole
   );
 }
 
-function VRow({ label, value, ok }: { label: ReactNode; value: ReactNode; ok: boolean | null }) {
+function VRow({ label, value, ok, verdict }: { label: ReactNode; value: ReactNode; ok?: boolean | null; verdict?: Verdict }) {
+  const v: Verdict = verdict ?? (ok === null || ok === undefined ? 'N/A' : ok ? 'PASS' : 'FAIL');
   return (
     <div className="vrow">
       <span>{label}</span>
       <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
         <b>{value}</b>
-        {ok === null ? <Tag tone="mute">N/A</Tag> : ok ? <Tag tone="pass">PASS</Tag> : <Tag tone="fail">FAIL</Tag>}
+        <Tag tone={verdictTone(v)}>{v}</Tag>
       </span>
     </div>
   );
@@ -77,7 +219,8 @@ export function ModelsView() {
   const irs = folds.map((f) => f.ir).filter(isNum);
   const irMean = irs.length ? mean(irs) : NaN;
   const details = useMemo(() => normalizeGateChecks(c?.gate_details), [c]);
-  const extraDetails = details.filter((d) => !/^(pbo|dsr|oos\s*\/\s*is)$/i.test(d.name.trim()));
+  const extraDetails = details.filter((d) => !/^(pbo|dsr|oos\s*\/\s*is|bh[-_ ]?fdr.*|param.*cliff.*)$/i.test(d.name.trim()));
+  const cliff = useMemo(() => worstCliff(normParamSensitivity(c?.param_sensitivity)), [c]);
 
   usePublishMetrics(
     'models',
@@ -125,16 +268,30 @@ export function ModelsView() {
       <ApiNotice error={ex.error ?? cp.error} what={ex.error ? '实验注册表' : 'CPCV 验证'} />
 
       <div className="kpis k5">
-        <Kpi label="IS Sharpe" value={c ? fx(c.is_sharpe) : '—'} sub={c ? <span>样本内 · 年化</span> : undefined} />
+        <Kpi label={<TermTip id="sharpe_is_oos" value={c ? c.is_sharpe : null}>IS Sharpe</TermTip>} value={c ? fx(c.is_sharpe) : '—'} sub={c ? <span>样本内 · 年化</span> : undefined} />
         <Kpi
-          label="OOS 中位夏普"
+          label={<TermTip id="sharpe_is_oos" value={c ? c.oos_median_sharpe : null}>OOS 中位夏普</TermTip>}
           value={c ? fx(c.oos_median_sharpe) : '—'}
-          sub={c ? <><Tag tone={c.oos_is_ratio >= OOS_IS_MIN ? 'pass' : 'fail'}>OOS/IS {fx(c.oos_is_ratio)}</Tag></> : undefined}
+          sub={
+            c ? (
+              <TermTip id="oos_is_ratio" as="span" value={c.oos_is_ratio}>
+                <Tag tone={verdictTone(judge(GATE_SPECS.oos_is_ratio, c.oos_is_ratio).verdict)}>OOS/IS {fx(c.oos_is_ratio)}</Tag>
+              </TermTip>
+            ) : undefined
+          }
         />
-        <Kpi label="CPCV PBO" value={c ? fx(c.pbo) : '—'} sub={c ? <><Tag tone={isNum(c.pbo) && c.pbo <= PBO_MAX ? 'pass' : 'fail'}>≤ {fx(PBO_MAX)}</Tag><span>过拟合概率</span></> : undefined} />
-        <Kpi label="Deflated Sharpe" value={c ? fx(c.dsr) : '—'} sub={c ? <><Tag tone={isNum(c.dsr) && c.dsr >= DSR_MIN ? 'pass' : 'warn'}>≥ {fx(DSR_MIN)}</Tag><span>M={selected?.trial_count_m ?? '—'}</span></> : undefined} />
         <Kpi
-          label="Purge 冲突"
+          label={<TermTip id="pbo" value={c ? c.pbo : null}>CPCV PBO</TermTip>}
+          value={c ? fx(c.pbo) : '—'}
+          sub={c ? <><Tag tone={verdictTone(judge(GATE_SPECS.pbo, c.pbo).verdict)}>≤ {fx(PBO_MAX)}</Tag><span>过拟合概率</span></> : undefined}
+        />
+        <Kpi
+          label={<TermTip id="dsr" value={c ? c.dsr : null} context={{ trial_count_m: selected?.trial_count_m ?? null }}>Deflated Sharpe</TermTip>}
+          value={c ? fx(c.dsr) : '—'}
+          sub={c ? <><Tag tone={verdictTone(judge(GATE_SPECS.dsr, c.dsr).verdict)}>≥ {fx(DSR_MIN)}</Tag><TermTip id="trial_count_m" as="span" value={selected?.trial_count_m ?? null}>M={selected?.trial_count_m ?? '—'}</TermTip></> : undefined}
+        />
+        <Kpi
+          label={<TermTip id="purge" value={c ? c.purge_conflicts : null}>Purge 冲突</TermTip>}
           value={c ? String(c.purge_conflicts) : '—'}
           sub={c ? <><Tag tone={c.purge_conflicts === 0 ? 'pass' : 'fail'}>{c.purge_conflicts === 0 ? 'CLEAN' : 'LEAK'}</Tag><span>purge {c.purge_days}D · embargo {c.embargo_days}D</span></> : undefined}
         />
@@ -195,7 +352,7 @@ export function ModelsView() {
 
       <div className="mg">
         <Panel
-          title={`CPCV ${c?.n_oos_paths ?? '—'} 路径 OOS 夏普分布 · ${selId ?? '—'}`}
+          title={<TermTip id="cpcv" value={c ? c.n_oos_paths : null}>{`CPCV ${c?.n_oos_paths ?? '—'} 路径 OOS 夏普分布 · ${selId ?? '—'}`}</TermTip>}
           prd="Q3.2"
           busy={busy}
           tools={
@@ -245,14 +402,14 @@ export function ModelsView() {
           {exps?.length ? (
             <>
               <div className="gsec" style={{ marginTop: 0 }}>
-                <span>CPCV PBO 过拟合概率</span>
+                <TermTip id="pbo">CPCV PBO 过拟合概率</TermTip>
                 <span className="c-up">阈值 {fx(PBO_MAX)}</span>
               </div>
               {exps.map((x) => (
                 <GateRow key={`p${x.experiment_id}`} x={x} on={x.experiment_id === selected?.experiment_id} val={x.cpcv_pbo} max={pboMax} thr={PBO_MAX} bad={isNum(x.cpcv_pbo) && x.cpcv_pbo > PBO_MAX} />
               ))}
               <div className="gsec">
-                <span>DEFLATED SHARPE RATIO</span>
+                <TermTip id="dsr">DEFLATED SHARPE RATIO</TermTip>
                 <span className="c-up">阈值 {fx(DSR_MIN)}</span>
               </div>
               {exps.map((x) => (
@@ -270,14 +427,26 @@ export function ModelsView() {
                 <b>{c.experiment_id} 门禁判定</b>
                 <Tag tone={triTone(c.verdict)}>{verdictLabel(c.verdict)}</Tag>
               </div>
-              <VRow label={`CPCV PBO ≤ ${fx(PBO_MAX)}`} value={fx(c.pbo)} ok={isNum(c.pbo) ? c.pbo <= PBO_MAX : null} />
-              <VRow label={`Deflated Sharpe ≥ ${fx(DSR_MIN)}`} value={fx(c.dsr)} ok={isNum(c.dsr) ? c.dsr >= DSR_MIN : null} />
-              <VRow label={`OOS / IS 夏普 ≥ ${fx(OOS_IS_MIN)}`} value={fx(c.oos_is_ratio)} ok={isNum(c.oos_is_ratio) ? c.oos_is_ratio >= OOS_IS_MIN : null} />
+              <VRow label={<TermTip id="pbo" value={c.pbo}>{`CPCV PBO ≤ ${fx(PBO_MAX)}`}</TermTip>} value={fx(c.pbo)} ok={isNum(c.pbo) ? c.pbo <= PBO_MAX : null} />
+              <VRow label={<TermTip id="dsr" value={c.dsr}>{`Deflated Sharpe ≥ ${fx(DSR_MIN)}`}</TermTip>} value={fx(c.dsr)} ok={isNum(c.dsr) ? c.dsr >= DSR_MIN : null} />
+              <VRow label={<TermTip id="oos_is_ratio" value={c.oos_is_ratio}>{`OOS / IS 夏普 ≥ ${fx(OOS_IS_MIN)}`}</TermTip>} value={fx(c.oos_is_ratio)} ok={isNum(c.oos_is_ratio) ? c.oos_is_ratio >= OOS_IS_MIN : null} />
+              <VRow
+                label={<TermTip id="bh_fdr" value={c.fdr_q_value ?? null}>{`BH-FDR q ≤ ${fx(FDR_Q)}`}</TermTip>}
+                value={isNum(c.fdr_q_value) ? fx(c.fdr_q_value, 3) : '未返回'}
+                verdict={judge(GATE_SPECS.bh_fdr, c.fdr_q_value ?? null).verdict}
+              />
+              <VRow
+                label={<TermTip id="param_cliff" value={cliff ? cliff.drop / 100 : null}>{`参数悬崖 ≤ ${fx(CLIFF_MAX * 100, 0)}%`}</TermTip>}
+                value={cliff ? `${fx(cliff.drop, 1)}% · ${cliff.param}` : '未返回'}
+                verdict={judge(GATE_SPECS.param_cliff, cliff ? cliff.drop / 100 : null).verdict}
+              />
               {extraDetails.map((d, i) => (
                 <VRow key={i} label={`${d.name}${d.threshold ? ` · ${d.threshold}` : ''}`} value={d.value ?? '—'} ok={d.passed} />
               ))}
               <div className="vrow">
-                <span>OOS 负夏普路径</span>
+                <TermTip id="negative_paths" value={c.n_oos_paths ? c.negative_path_count / c.n_oos_paths : null}>
+                  OOS 负夏普路径
+                </TermTip>
                 <span style={{ display: 'flex', gap: 6, alignItems: 'center' }}>
                   <b>
                     {c.negative_path_count}/{c.n_oos_paths}
@@ -301,8 +470,13 @@ export function ModelsView() {
         </Panel>
       </div>
 
+      <div className="g2">
+        <FdrCard c={c} />
+        <ParamCliffCard c={c} />
+      </div>
+
       <Panel
-        title="Walk-Forward 样本外滚动"
+        title={<TermTip id="walk_forward">Walk-Forward 样本外滚动</TermTip>}
         prd="Q3.2"
         sub={c ? `${folds.length} folds · purge ${c.purge_days}D / embargo ${c.embargo_days}D` : undefined}
         busy={busy}

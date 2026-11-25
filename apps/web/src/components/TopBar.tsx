@@ -6,6 +6,7 @@ import { UNIVERSES, universeMeta } from '@/lib/meta';
 import { fmtMs, fmtTs } from '@/lib/format';
 import { useApi } from '@/lib/use-api';
 import { useWorkbench } from '@/lib/workbench';
+import { drawerStore, useDrawer } from '@/lib/glossary/store';
 import type { UniverseId } from '@/lib/types';
 import { BrandMark, Icon } from './icons';
 import { CopyCmd, Prd, Tag, triTone } from './ui';
@@ -207,6 +208,18 @@ function AgentChip() {
   );
 }
 
+function GlossaryButton() {
+  const d = useDrawer();
+  const on = d?.kind === 'glossary';
+  return (
+    <button type="button" className={`kbtn ${on ? 'on' : ''}`} onClick={() => drawerStore.toggleGlossary()} title="术语速查库（⌘K / Ctrl+K）" aria-expanded={on}>
+      <Icon name="book" size={12} sw={1.8} />
+      术语
+      <kbd>⌘K</kbd>
+    </button>
+  );
+}
+
 export function TopBar() {
   const { universe, setUniverse, theme, setTheme, prd, setPrd, botOpen, setBotOpen } = useWorkbench();
   const u = universeMeta(universe);
@@ -215,7 +228,7 @@ export function TopBar() {
       <div className="brand">
         <BrandMark />
         <b>QuantLab Pro</b>
-        <span className="ver">V2.0 PRO-QUANT</span>
+        <span className="ver">V3.0 PRO-QUANT</span>
       </div>
       <div className="ctx">
         <label className="fld">
@@ -239,6 +252,7 @@ export function TopBar() {
         <Prd id="Q1.3" />
       </div>
       <div className="rt">
+        <GlossaryButton />
         <ApiChip />
         <AgentChip />
         <button type="button" className={`tg ${prd ? 'on' : ''}`} onClick={() => setPrd(!prd)} title="切换 PRD 模块编号标注">

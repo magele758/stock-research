@@ -12,12 +12,12 @@ from scipy.stats import kurtosis as sample_kurtosis
 from scipy.stats import norm, rankdata
 from scipy.stats import skew as sample_skew
 
-from quant_core.schemas import CpcvRequest, CpcvResult, GateVerdict
+from quant_core.schemas import INSTITUTIONAL_GATES, CpcvRequest, CpcvResult, GateVerdict
 
 _ANNUALIZATION = sqrt(252)
-_PBO_LIMIT = 0.25
-_DSR_LIMIT = 0.95
-_OOS_IS_LIMIT = 0.50
+_PBO_LIMIT = INSTITUTIONAL_GATES["cpcv_pbo_max"]
+_DSR_LIMIT = INSTITUTIONAL_GATES["dsr_min"]
+_OOS_IS_LIMIT = INSTITUTIONAL_GATES["oos_is_ratio_min"]
 
 
 @dataclass(frozen=True)
@@ -359,6 +359,9 @@ def run_cpcv_gate(
     elif all(check["passed"] for check in checks):
         verdict = GateVerdict.PASS
     baseline_sharpe = float(_sharpe(baseline)) if baseline is not None else float("nan")
+    from .formal import _candidate_fdr
+
+    spa, fdr_items = _candidate_fdr(matrix, baseline, trials)
     return CpcvResult(
         experiment_id=req.experiment_id,
         n_splits=req.n_splits,
@@ -381,4 +384,7 @@ def run_cpcv_gate(
         walk_forward_folds=walk_forward,
         verdict=verdict,
         gate_details=checks,
+        fdr_q_value=fdr_items[0]["q_value"],
+        spa_p_value=spa["spa_p_value"],
+        fdr_items=fdr_items,
     )

@@ -17,9 +17,10 @@ export const UNIVERSES: UniverseMeta[] = [
 
 export const universeMeta = (id: string): UniverseMeta => UNIVERSES.find((u) => u.id === id) ?? UNIVERSES[0];
 
-export type ViewKey = 'alpha' | 'models' | 'portfolio' | 'backtest' | 'data' | 'shadow';
+export type ViewKey = 'research' | 'alpha' | 'models' | 'portfolio' | 'backtest' | 'data' | 'shadow';
 
 export const VIEWS: { key: ViewKey; label: string; path: string; prd: string; icon: ViewKey }[] = [
+  { key: 'research', label: '研究工作台·集群派发', path: '/research', prd: 'Q7.3', icon: 'research' },
   { key: 'alpha', label: 'Alpha 因子工坊', path: '/alpha', prd: 'Q2', icon: 'alpha' },
   { key: 'models', label: '多因子合成·过拟合', path: '/models', prd: 'Q3', icon: 'models' },
   { key: 'portfolio', label: '组合优化·Barra', path: '/portfolio', prd: 'Q4', icon: 'portfolio' },

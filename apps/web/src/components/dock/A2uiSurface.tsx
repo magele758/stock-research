@@ -137,6 +137,55 @@ export function A2uiSurface({ surface, origin, done, busy, onAction }: Props) {
           </div>
         );
       }
+      case 'QuantStudyCard': {
+        const v = (k: string) => asText(resolveValue(p[k], model));
+        const metrics = Array.isArray(p.metrics) ? (p.metrics as Record<string, unknown>[]) : [];
+        const warnings = Array.isArray(p.warnings) ? (p.warnings as unknown[]).map(asText).filter(Boolean) : [];
+        const status = v('status') || 'DRAFT';
+        const verdict = v('verdict');
+        const tone = /VERIFIED|COMPLETED/.test(verdict || status) ? 'pass' : /FALSIFIED|FAILED|ERROR/.test(verdict || status) ? 'fail' : /PENDING|DRAFT/.test(verdict || status) ? 'mute' : 'warn';
+        return (
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 5 }}>
+            <div className="a2row" style={{ flexWrap: 'nowrap' }}>
+              <Icon name="research" size={12} style={{ color: 'var(--sig)', flex: 'none' }} />
+              <span className="a2t" style={{ flex: 1, minWidth: 0, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v('title') || '未命名研究'}</span>
+              <span className={`tag ${tone}`}>{verdict && verdict !== 'PENDING' ? verdict : status}</span>
+            </div>
+            <div className="a2g" style={{ gridTemplateColumns: 'auto 1fr', borderTop: 0, paddingTop: 0 }}>
+              <span>study</span>
+              <b style={{ textAlign: 'left' }}>{v('study_id') || '（未派发）'}</b>
+              {v('parent_study_id') ? (
+                <>
+                  <span>parent</span>
+                  <b style={{ textAlign: 'left' }}>{v('parent_study_id')}</b>
+                </>
+              ) : null}
+              <span>kind · cluster</span>
+              <b style={{ textAlign: 'left' }}>
+                {v('kind') || 'factor'} · {v('target_cluster') || 'engine_sandbox'}
+              </b>
+              {v('proofs') ? (
+                <>
+                  <span>proofs</span>
+                  <b style={{ textAlign: 'left' }}>{v('proofs')}</b>
+                </>
+              ) : null}
+              {metrics.map((m, i) => (
+                <FragmentKey key={i}>
+                  <span>{asText(m.label)}</span>
+                  <b style={{ textAlign: 'left' }}>{asText(resolveValue(m.value, model))}</b>
+                </FragmentKey>
+              ))}
+            </div>
+            {v('hypothesis') ? <div className="a2b">{v('hypothesis').slice(0, 240)}</div> : null}
+            {warnings.map((w, i) => (
+              <div key={i} className="a2b c-warn">
+                {w}
+              </div>
+            ))}
+          </div>
+        );
+      }
       default:
         return (
           <div className="a2x" title="Unregistered A2UI component — rendered as raw props">

@@ -11,15 +11,19 @@ import { ApiNotice, DataSlot, Kpi, Legend, Panel, Seg, SolveMeta, Tag, ViewHeade
 import { Icon } from '../icons';
 import { Tornado, type TornadoRow } from '../charts/Tornado';
 import { BarChart } from '../charts/BarChart';
+import { TermTip } from '../glossary/TermTip';
+import { CapacitySection } from '../proof/CapacitySection';
+import { InvariantStrip } from '../proof/InvariantStrip';
+import { normInvariants } from '@/lib/v3';
 
 type SliderKey = 'max_stock_weight' | 'max_industry_dev' | 'turnover_lambda' | 'target_te' | 'max_size_z';
 
-const SLIDERS: { key: SliderKey; label: string; min: number; max: number; step: number; scale: number; fmt: (v: number) => string }[] = [
-  { key: 'max_stock_weight', label: '单股权重上限', min: 1, max: 15, step: 0.5, scale: 100, fmt: (v) => fx(v, 1) + '%' },
-  { key: 'max_industry_dev', label: '行业最大偏离', min: 1, max: 5, step: 0.1, scale: 100, fmt: (v) => '±' + fx(v, 1) + '%' },
-  { key: 'turnover_lambda', label: '换手率 L1 惩罚系数 λ', min: 0, max: 2, step: 0.05, scale: 1, fmt: (v) => fx(v, 2) },
-  { key: 'target_te', label: '目标跟踪误差 TE', min: 3, max: 8, step: 0.1, scale: 100, fmt: (v) => fx(v, 1) + '%' },
-  { key: 'max_size_z', label: 'Size 风格敞口限制', min: 0.2, max: 0.8, step: 0.02, scale: 1, fmt: (v) => '±' + fx(v, 2) + 'σ' }
+const SLIDERS: { key: SliderKey; label: string; term: string; min: number; max: number; step: number; scale: number; fmt: (v: number) => string }[] = [
+  { key: 'max_stock_weight', label: '单股权重上限', term: 'enc', min: 1, max: 15, step: 0.5, scale: 100, fmt: (v) => fx(v, 1) + '%' },
+  { key: 'max_industry_dev', label: '行业最大偏离', term: 'industry_active_dev', min: 1, max: 5, step: 0.1, scale: 100, fmt: (v) => '±' + fx(v, 1) + '%' },
+  { key: 'turnover_lambda', label: '换手率 L1 惩罚系数 λ', term: 'turnover_lambda', min: 0, max: 2, step: 0.05, scale: 1, fmt: (v) => fx(v, 2) },
+  { key: 'target_te', label: '目标跟踪误差 TE', term: 'tracking_error', min: 3, max: 8, step: 0.1, scale: 100, fmt: (v) => fx(v, 1) + '%' },
+  { key: 'max_size_z', label: 'Size 风格敞口限制', term: 'style_exposure', min: 0.2, max: 0.8, step: 0.02, scale: 1, fmt: (v) => '±' + fx(v, 2) + 'σ' }
 ];
 
 const STYLE_LABELS: Record<string, string> = {
@@ -118,6 +122,7 @@ export function PortfolioView() {
   const styles = o?.style_exposures ?? [];
   const breaches = styles.filter(isBreach);
   const sizeRow = styles.find((s) => isSize(s.factor));
+  const invariants = normInvariants(o?.invariants);
   const maxStyleZ = styles.reduce((m, s) => Math.max(m, Math.abs(s.post_opt)), 0);
 
   usePublishMetrics(
@@ -144,7 +149,9 @@ export function PortfolioView() {
     return (
       <div className="sl" key={s.key}>
         <div className="slh">
-          <span>{s.label}</span>
+          <TermTip id={s.term} display={s.fmt(dv)}>
+            {s.label}
+          </TermTip>
           <b>{s.fmt(dv)}</b>
         </div>
         <input
@@ -167,7 +174,9 @@ export function PortfolioView() {
   const solveLine = o ? (
     <div style={{ marginTop: 6 }}>
       <div className="solv" style={{ flexWrap: 'wrap' }}>
-        <Tag tone={SOLVE_TAG[o.solve_status]?.[0] ?? 'mute'}>{SOLVE_TAG[o.solve_status]?.[1] ?? String(o.solve_status).toUpperCase()}</Tag>
+        <TermTip id="solve_status" as="span" display={o.solve_status} context={{ solver: o.solver }}>
+          <Tag tone={SOLVE_TAG[o.solve_status]?.[0] ?? 'mute'}>{SOLVE_TAG[o.solve_status]?.[1] ?? String(o.solve_status).toUpperCase()}</Tag>
+        </TermTip>
         <span>
           {o.solver} · {fmtMs(o.solve_ms)}
         </span>
@@ -205,14 +214,14 @@ export function PortfolioView() {
   const kpis = (
     <div className="kpis k5">
       <Kpi
-        label="预计年化净超额"
+        label={<TermTip id="gross_vs_net" display={o ? sg(o.expected_net_excess_pct, 2) + '%' : undefined}>预计年化净超额</TermTip>}
         value={o ? sg(o.expected_net_excess_pct, 2) + '%' : '—'}
         sub={o ? <span>毛 {fx(o.expected_gross_excess_pct, 1)}% · 费 {fx(o.expected_cost_pct, 2)}%</span> : null}
       />
-      <Kpi label="预期跟踪误差" value={o ? fx(o.predicted_te_pct, 2) + '%' : '—'} sub={<span>目标 ≤ {fx(constraints.target_te * 100, 1)}%</span>} />
-      <Kpi label="预期信息比率" value={o ? fx(o.expected_ir, 2) : '—'} sub={<span>net / TE</span>} />
-      <Kpi label="单次单边换手" value={o ? fx(o.oneway_turnover_pct, 1) + '%' : '—'} sub={o ? <span>年化 {fx(o.annualized_turnover, 1)}x</span> : null} />
-      <Kpi label="有效持股数 ENC" value={o ? fx(o.effective_n_stocks, 0) : '—'} sub={<span>单股上限 {fx(constraints.max_stock_weight * 100, 1)}%</span>} />
+      <Kpi label={<TermTip id="tracking_error" display={o ? fx(o.predicted_te_pct, 2) + '%' : undefined} context={{ target_pct: +(constraints.target_te * 100).toFixed(2) }}>预期跟踪误差</TermTip>} value={o ? fx(o.predicted_te_pct, 2) + '%' : '—'} sub={<span>目标 ≤ {fx(constraints.target_te * 100, 1)}%</span>} />
+      <Kpi label={<TermTip id="information_ratio" value={o ? o.expected_ir : null}>预期信息比率</TermTip>} value={o ? fx(o.expected_ir, 2) : '—'} sub={<span>net / TE</span>} />
+      <Kpi label={<TermTip id="turnover_lambda" display={o ? fx(o.oneway_turnover_pct, 1) + '%' : undefined}>单次单边换手</TermTip>} value={o ? fx(o.oneway_turnover_pct, 1) + '%' : '—'} sub={o ? <span>年化 {fx(o.annualized_turnover, 1)}x</span> : null} />
+      <Kpi label={<TermTip id="enc" value={o ? o.effective_n_stocks : null}>有效持股数 ENC</TermTip>} value={o ? fx(o.effective_n_stocks, 0) : '—'} sub={<span>单股上限 {fx(constraints.max_stock_weight * 100, 1)}%</span>} />
     </div>
   );
 
@@ -298,7 +307,7 @@ export function PortfolioView() {
       ) : null}
       <div className="pfg">
         <div className="stack" style={{ minWidth: 0 }}>
-          <Panel title="cvxpy 约束调节器" prd="Q4.2" tools={<span className="ps">拖动 350ms 防抖重算</span>}>
+          <Panel title={<TermTip id="opt_objective">cvxpy 约束调节器</TermTip>} prd="Q4.2" tools={<span className="ps">拖动 350ms 防抖重算</span>}>
             <Seg<OptObjective>
               stretch
               value={constraints.objective}
@@ -318,10 +327,16 @@ export function PortfolioView() {
             {solveLine}
           </Panel>
           <Panel
-            title="当前风险分解 · 优化前"
+            title={<TermTip id="risk_decomposition">当前风险分解 · 优化前</TermTip>}
             prd="Q4.1"
             busy={barra.loading && !!b}
-            tools={b ? <Tag tone={psdOk ? 'pass' : 'fail'}>{psdOk ? 'PSD OK' : 'NOT PSD'}</Tag> : null}
+            tools={
+              b ? (
+                <TermTip id="psd" as="span" value={b.psd_min_eigenvalue} display={b.psd_min_eigenvalue.toExponential(2)}>
+                  <Tag tone={psdOk ? 'pass' : 'fail'}>{psdOk ? 'PSD OK' : 'NOT PSD'}</Tag>
+                </TermTip>
+              ) : null
+            }
           >
             <DataSlot height={96} ready={!!b} loading={barra.loading} error={barra.error}>
               {() => (
@@ -359,8 +374,17 @@ export function PortfolioView() {
         <div className="stack" style={{ minWidth: 0 }}>
           {kpis}
           {banner}
+          {o ? (
+            <div>
+              <div className="gsec" style={{ marginTop: 0 }}>
+                <TermTip id="conservation_law">优化不变量</TermTip>
+                <span>{invariants.length ? `${invariants.filter((i) => i.passed).length}/${invariants.length} OK` : '权重和 · 约束违背 · PSD · 风格界 · 行业界'}</span>
+              </div>
+              <InvariantStrip items={invariants} height={46} emptyDetail="需 V3 /portfolio/optimize 返回 invariants[]（权重和 / 约束违背 / PSD / 风格硬界 / 行业偏离）" />
+            </div>
+          ) : null}
           <Panel
-            title="Barra CNE6 主动风格暴露 · 龙卷风图 (σ)"
+            title={<TermTip id="barra_cne6">Barra CNE6 主动风格暴露 · 龙卷风图 (σ)</TermTip>}
             prd="Q4.1"
             busy={busy}
             tools={
@@ -382,7 +406,7 @@ export function PortfolioView() {
         </div>
       </div>
       <Panel
-        title="申万一级行业主动权重偏离 (%)"
+        title={<TermTip id="industry_active_dev">申万一级行业主动权重偏离 (%)</TermTip>}
         prd="Q4.2"
         busy={busy}
         tools={indDev.length ? <span className="ps">|偏离| 均值 {fx(mean(indVals.map(Math.abs)), 2)}% · 触限 {indTouch} 个行业</span> : null}
@@ -405,6 +429,7 @@ export function PortfolioView() {
           )}
         </DataSlot>
       </Panel>
+      <CapacitySection embedded={o?.capacity_frontier} experimentId={experimentId} universeId={universe} snapshotId={o?.snapshot_id ?? snapshotId} apiOnline={apiOnline} prd="Q4.3" />
       <Panel title={`目标调仓权重 · Top ${hold.length || ''} 持仓明细`} prd="Q4.2" flush busy={busy} tools={holdNote ? <span className="ps">{holdNote}</span> : null}>
         <DataSlot height={280} ready={ready && hold.length > 0} loading={opt.loading} error={opt.error}>
           {() => (
