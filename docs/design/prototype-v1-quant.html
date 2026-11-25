@@ -1,0 +1,1534 @@
+<!DOCTYPE html>
+<html lang="zh-CN" data-theme="dark">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>QuantLab Pro · 机构级量化投研终端 · 高保真设计稿 V2.0</title>
+<style>
+:root{
+  --f-sans:-apple-system,BlinkMacSystemFont,'SF Pro Text','PingFang SC','Hiragino Sans GB','Microsoft YaHei','Helvetica Neue',Arial,sans-serif;
+  --f-mono:'SF Mono','JetBrains Mono','Menlo','Consolas',ui-monospace,monospace;
+  --prd:#FACC15;--prd-fg:#141414;
+}
+[data-theme=dark]{
+  --bg:#090C10;--bg1:#0E1217;--bg2:#131920;--bg3:#1A212A;
+  --line:#1D252F;--line2:#2A3441;--grid:#161D26;
+  --tx:#E4E9EF;--tx2:#9AA5B1;--tx3:#5E6A77;
+  --up:#EF5350;--dn:#26A69A;--sig:#38BDF8;--warn:#F59E0B;--pass:#3FB97F;--mem:#A78BFA;
+  --up-bg:rgba(239,83,80,.12);--dn-bg:rgba(38,166,154,.12);--sig-bg:rgba(56,189,248,.09);--warn-bg:rgba(245,158,11,.11);--pass-bg:rgba(63,185,127,.11);--mem-bg:rgba(167,139,250,.08);
+  --sig-line:rgba(56,189,248,.38);--mem-line:rgba(167,139,250,.38);
+  --on-sig:#03121C;
+  --syn-kw:#38BDF8;--syn-fn:#C4D3E3;--syn-str:#D9B26A;--syn-num:#F0A35E;--syn-var:#A78BFA;
+  --shadow:0 8px 24px rgba(0,0,0,.45);
+}
+[data-theme=light]{
+  --bg:#ECE9E1;--bg1:#FAF8F3;--bg2:#F2EFE8;--bg3:#E6E2D8;
+  --line:#DAD5C9;--line2:#C2BBAC;--grid:#E9E5DC;
+  --tx:#121417;--tx2:#454B53;--tx3:#80848A;
+  --up:#D32F2F;--dn:#00897B;--sig:#0369A1;--warn:#B45309;--pass:#18794E;--mem:#6D28D9;
+  --up-bg:rgba(211,47,47,.08);--dn-bg:rgba(0,137,123,.08);--sig-bg:rgba(3,105,161,.07);--warn-bg:rgba(180,83,9,.08);--pass-bg:rgba(24,121,78,.08);--mem-bg:rgba(109,40,217,.06);
+  --sig-line:rgba(3,105,161,.35);--mem-line:rgba(109,40,217,.3);
+  --on-sig:#FFFFFF;
+  --syn-kw:#0369A1;--syn-fn:#1F2933;--syn-str:#8A5A00;--syn-num:#B45309;--syn-var:#6D28D9;
+  --shadow:0 8px 24px rgba(40,30,10,.16);
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;overflow:hidden}
+body{font:12px/1.45 var(--f-sans);background:var(--bg);color:var(--tx);-webkit-font-smoothing:antialiased;font-feature-settings:'tnum' 1}
+.mono,.n,code,pre,.kv,input,select{font-variant-numeric:tabular-nums}
+.mono,.n,code,pre{font-family:var(--f-mono)}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+svg text{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+::-webkit-scrollbar{width:8px;height:8px}::-webkit-scrollbar-thumb{background:var(--line2);border:2px solid var(--bg1)}::-webkit-scrollbar-track{background:transparent}
+.c-up{color:var(--up)}.c-dn{color:var(--dn)}.c-sig{color:var(--sig)}.c-warn{color:var(--warn)}.c-pass{color:var(--pass)}.c-3{color:var(--tx3)}.c-2{color:var(--tx2)}
+
+/* ---------- Command Chrome ---------- */
+.chrome{height:44px;display:flex;align-items:center;gap:12px;padding:0 10px 0 0;border-bottom:1px solid var(--line);background:var(--bg1);position:relative;z-index:5}
+.brand{display:flex;align-items:center;gap:7px;width:200px;padding-left:12px;height:100%;border-right:1px solid var(--line);flex:none}
+.brand b{font-size:13px;font-weight:680;letter-spacing:0;white-space:nowrap}
+.ver{font:600 8.5px var(--f-mono);letter-spacing:.02em;color:var(--sig);border:1px solid var(--sig-line);padding:1px 3px;border-radius:2px;white-space:nowrap}
+.ctx{display:flex;align-items:center;gap:6px;flex:1;min-width:0;overflow:hidden}
+.fld{display:flex;align-items:center;height:26px;border:1px solid var(--line2);border-radius:2px;background:var(--bg2);position:relative;white-space:nowrap}
+.fld>span{padding:0 7px;color:var(--tx3);font:600 9.5px var(--f-mono);letter-spacing:.08em;border-right:1px solid var(--line);height:100%;display:flex;align-items:center}
+.fld select{appearance:none;-webkit-appearance:none;background:transparent;border:0;color:var(--tx);font:550 11.5px var(--f-sans);padding:0 26px 0 8px;height:100%;cursor:pointer;outline:none}
+.fld select option{background:var(--bg2);color:var(--tx)}
+.fld .chv{position:absolute;right:7px;top:6px;pointer-events:none;color:var(--tx3)}
+.fld .v{padding:0 8px;font:11px var(--f-mono);color:var(--tx2)}
+.rt{display:flex;align-items:center;gap:8px;flex:none}
+.hb{display:flex;align-items:center;gap:7px;height:26px;padding:0 9px;border:1px solid var(--line2);border-radius:2px;font:10.5px var(--f-mono);color:var(--tx2);white-space:nowrap}
+.hb b{color:var(--pass);font-weight:600}
+.pulse{width:6px;height:6px;background:var(--pass);box-shadow:0 0 0 0 var(--pass);animation:pulse 2.4s infinite}
+@keyframes pulse{0%{box-shadow:0 0 0 0 rgba(63,185,127,.55)}70%{box-shadow:0 0 0 6px rgba(63,185,127,0)}100%{box-shadow:0 0 0 0 rgba(63,185,127,0)}}
+.tg{height:26px;padding:0 9px;border:1px solid var(--line2);border-radius:2px;font-size:11px;color:var(--tx2);display:flex;align-items:center;gap:6px;white-space:nowrap}
+.tg:hover{color:var(--tx);border-color:var(--tx3)}
+.tg.on{color:var(--prd-fg);background:var(--prd);border-color:var(--prd);font-weight:600}
+.ib{width:26px;height:26px;border:1px solid var(--line2);border-radius:2px;display:grid;place-items:center;color:var(--tx2)}
+.ib:hover,.ib.on{color:var(--sig);border-color:var(--sig-line)}
+.seg{display:inline-flex;border:1px solid var(--line2);border-radius:2px;overflow:hidden;flex:none}
+.seg button{padding:0 8px;height:24px;font-size:10.5px;color:var(--tx3);border-right:1px solid var(--line2);display:flex;align-items:center;gap:5px;white-space:nowrap}
+.seg button:last-child{border-right:0}
+.seg button:hover{color:var(--tx)}
+.seg button.on{background:var(--bg3);color:var(--tx);box-shadow:inset 0 -1.5px 0 var(--sig)}
+.chrome .seg button{height:24px}
+
+/* ---------- Layout ---------- */
+.app{display:grid;grid-template-columns:200px minmax(0,1fr) 360px;height:calc(100% - 44px)}
+body.bot-off .app{grid-template-columns:200px minmax(0,1fr) 0}
+body.bot-off .bot{display:none}
+.main{overflow-y:auto;overflow-x:hidden;padding:12px 14px 28px;min-width:0}
+.stack>*+*{margin-top:10px}
+
+/* ---------- Nav ---------- */
+.nav{border-right:1px solid var(--line);background:var(--bg1);display:flex;flex-direction:column;min-height:0}
+.nsec{padding:12px 12px 6px;font:600 9px var(--f-mono);letter-spacing:.14em;color:var(--tx3);display:flex;justify-content:space-between}
+.ni{display:grid;grid-template-columns:16px 1fr auto;column-gap:9px;align-items:center;padding:6px 10px 6px 10px;border-left:2px solid transparent;color:var(--tx2);cursor:pointer;width:100%;text-align:left}
+.ni:hover{background:var(--bg2);color:var(--tx)}
+.ni.on{background:var(--bg2);color:var(--tx);border-left-color:var(--sig)}
+.ni.on svg{color:var(--sig)}
+.ni b{font-weight:560;font-size:12px;white-space:nowrap}
+.ni small{grid-column:2;font:10px var(--f-mono);color:var(--tx3)}
+.ni em{font:600 9px var(--f-mono);color:var(--tx3);font-style:normal;grid-row:1/3;grid-column:3;border:1px solid var(--line2);padding:0 3px;border-radius:2px}
+.ni svg{grid-row:1/3}
+.xl{flex:1;overflow-y:auto;min-height:0}
+.xi{display:block;padding:6px 12px;border-bottom:1px solid var(--line);cursor:pointer;width:100%;text-align:left}
+.xi:hover{background:var(--bg2)}
+.xi.on{background:var(--sig-bg)}
+.xi div{display:flex;justify-content:space-between;align-items:center}
+.xi span{font:10.5px var(--f-mono);color:var(--tx2)}
+.xi small{display:block;font-size:10.5px;color:var(--tx3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.nfoot{border-top:1px solid var(--line);padding:8px 12px;font:10px/1.7 var(--f-mono);color:var(--tx3)}
+.nfoot b{color:var(--tx2);font-weight:500}
+
+/* ---------- Common ---------- */
+.vh{display:flex;align-items:flex-end;justify-content:space-between;gap:16px}
+.crumb{font:10px var(--f-mono);color:var(--tx3);letter-spacing:.06em;display:flex;gap:6px;align-items:center}
+.crumb b{color:var(--sig);font-weight:600}
+.vh h1{font-size:17px;font-weight:660;letter-spacing:.005em;margin-top:2px;white-space:nowrap}
+.vh p{font-size:11px;color:var(--tx3);margin-top:1px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.vh-act{display:flex;gap:6px;align-items:center;flex:none}
+.panel{background:var(--bg1);border:1px solid var(--line);border-radius:2px;min-width:0;position:relative}
+.ph{display:flex;align-items:center;gap:8px;height:30px;padding:0 10px;border-bottom:1px solid var(--line);white-space:nowrap}
+.pt{font-weight:620;font-size:11.5px}
+.ps{color:var(--tx3);font:10px var(--f-mono)}
+.tools{margin-left:auto;display:flex;gap:6px;align-items:center}
+.pb{padding:10px}
+.pb.flush{padding:0}
+.cv{width:100%;position:relative}
+.cv svg{display:block}
+.g2{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:10px}
+.tag{display:inline-flex;align-items:center;gap:4px;font:600 9.5px/1 var(--f-mono);padding:3px 5px;border-radius:2px;letter-spacing:.03em;white-space:nowrap;border:1px solid transparent}
+.tag.pass{color:var(--pass);background:var(--pass-bg);border-color:color-mix(in srgb,var(--pass) 30%,transparent)}
+.tag.warn{color:var(--warn);background:var(--warn-bg);border-color:color-mix(in srgb,var(--warn) 32%,transparent)}
+.tag.fail{color:var(--up);background:var(--up-bg);border-color:color-mix(in srgb,var(--up) 32%,transparent)}
+.tag.info{color:var(--sig);background:var(--sig-bg);border-color:var(--sig-line)}
+.tag.mute{color:var(--tx2);background:var(--bg2);border-color:var(--line2)}
+.btn{height:26px;padding:0 10px;border:1px solid var(--line2);border-radius:2px;font-size:11px;color:var(--tx);background:var(--bg2);display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.btn:hover{border-color:var(--sig)}
+.btn.pri{background:var(--sig);border-color:var(--sig);color:var(--on-sig);font-weight:620}
+.btn.pri:hover{filter:brightness(1.08)}
+.btn.sm{height:22px;padding:0 7px;font-size:10.5px}
+.btn.warnb{border-color:color-mix(in srgb,var(--warn) 45%,transparent);color:var(--warn);background:var(--warn-bg)}
+.prd{display:none;font:700 9px/1 var(--f-mono);color:var(--prd-fg);background:var(--prd);padding:3px 4px;border-radius:1px;letter-spacing:.02em;white-space:nowrap;vertical-align:middle}
+body.prd-on .prd{display:inline-flex}
+body.prd-on .panel{outline:1px dashed color-mix(in srgb,var(--prd) 45%,transparent);outline-offset:-1px}
+.lg{display:flex;flex-wrap:wrap;gap:4px 10px;font:10px var(--f-mono);color:var(--tx3);align-items:center}
+.lg i{display:inline-block;width:10px;height:2px;margin-right:4px;vertical-align:middle}
+.lg i.bx{height:8px;width:8px}
+
+/* ---------- KPI ---------- */
+.kpis{display:grid;border:1px solid var(--line);background:var(--bg1);border-radius:2px}
+.k8{grid-template-columns:repeat(8,minmax(0,1fr))}.k5{grid-template-columns:repeat(5,minmax(0,1fr))}.k4{grid-template-columns:repeat(4,minmax(0,1fr))}
+.kpi{padding:7px 10px 8px;border-right:1px solid var(--line);min-width:0}
+.kpi:last-child,.k5 .kpi:nth-child(5n){border-right:0}
+.k5.two .kpi:nth-child(-n+5){border-bottom:1px solid var(--line)}
+.kl{font-size:10.5px;color:var(--tx3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.kv{font:520 17px/1.25 var(--f-mono);margin-top:2px;letter-spacing:-.01em;white-space:nowrap;border-radius:1px}
+.kv small{font-size:11px;color:var(--tx3);margin-left:2px}
+.ks{display:flex;align-items:center;gap:5px;font:10px var(--f-mono);color:var(--tx3);white-space:nowrap;overflow:hidden;margin-top:3px}
+.chg{animation:chg 1s ease-out}
+@keyframes chg{0%{background:var(--sig-bg);color:var(--sig)}100%{background:transparent}}
+.gstrip{display:flex;flex-wrap:wrap;gap:6px}
+.gs{display:flex;align-items:center;gap:7px;padding:5px 9px;border:1px solid var(--line);border-left-width:2px;background:var(--bg1);font-size:11px;color:var(--tx2);border-radius:2px}
+.gs.pass{border-left-color:var(--pass)}.gs.warn{border-left-color:var(--warn)}.gs.fail{border-left-color:var(--up)}
+.gs b{font:600 10px var(--f-mono)}
+
+/* ---------- Alpha ---------- */
+.ftabs{display:flex;border-bottom:1px solid var(--line);overflow:hidden}
+.ftab{padding:7px 12px 6px;border-right:1px solid var(--line);text-align:left;color:var(--tx3);position:relative;min-width:0;flex:1}
+.ftab span{font-size:11px;display:block;white-space:nowrap}
+.ftab em{font-style:normal;font-size:10px;display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ftab:hover{color:var(--tx2);background:var(--bg2)}
+.ftab.on{color:var(--tx);background:var(--bg)}
+.ftab.on::after{content:'';position:absolute;left:0;right:0;top:0;height:2px;background:var(--sig)}
+.ftab.on span{color:var(--sig)}
+.defg{display:grid;grid-template-columns:minmax(0,1fr) 318px}
+.ed{background:var(--bg);font:11.5px/19px var(--f-mono);padding:8px 0;border-right:1px solid var(--line);overflow:hidden;min-height:150px}
+.ln{display:flex;white-space:pre}
+.ln i{width:34px;text-align:right;padding-right:12px;color:var(--tx3);font-style:normal;user-select:none;flex:none;opacity:.7}
+.ln span{overflow:hidden;text-overflow:ellipsis}
+.tk-c{color:var(--tx3);font-style:italic}.tk-s{color:var(--syn-str)}.tk-n{color:var(--syn-num)}.tk-k{color:var(--syn-kw);font-weight:600}.tk-f{color:var(--syn-fn);font-weight:600}.tk-v{color:var(--syn-var)}
+.edm{display:flex;gap:12px;padding:5px 10px;border-top:1px solid var(--line);border-right:1px solid var(--line);font:10px var(--f-mono);color:var(--tx3);background:var(--bg1)}
+.pipe{padding:9px 10px;display:flex;flex-direction:column;gap:8px}
+.ttl{font:600 9.5px var(--f-mono);letter-spacing:.1em;color:var(--tx3);display:flex;align-items:center;gap:6px}
+.chips{display:flex;flex-wrap:wrap;gap:5px}
+.chip{display:inline-flex;align-items:center;gap:6px;height:24px;padding:0 8px 0 7px;border:1px solid var(--line2);border-radius:2px;font-size:11px;color:var(--tx3);background:var(--bg)}
+.chip .cb{width:10px;height:10px;border:1px solid var(--tx3);position:relative;flex:none}
+.chip.on{color:var(--tx);border-color:var(--sig-line);background:var(--sig-bg)}
+.chip.on .cb{background:var(--sig);border-color:var(--sig)}
+.chip.on .cb::after{content:'';position:absolute;left:2.5px;top:0;width:3px;height:6px;border:solid var(--on-sig);border-width:0 1.5px 1.5px 0;transform:rotate(45deg)}
+.chip:hover{border-color:var(--sig)}
+.mtr{display:grid;grid-template-columns:62px 1fr 52px;align-items:center;gap:8px;font-size:10.5px;color:var(--tx2);height:16px}
+.mtb{height:6px;background:var(--bg3);position:relative}
+.mtb .mz{position:absolute;left:50%;top:-3px;bottom:-3px;width:1px;background:var(--tx3)}
+.mtb .lim{position:absolute;top:-3px;bottom:-3px;width:0;border-left:1px dashed var(--warn);opacity:.7}
+.mtb b{position:absolute;top:0;bottom:0;transition:all .35s}
+.mtr em{font:10.5px var(--f-mono);font-style:normal;text-align:right}
+
+/* ---------- Tables ---------- */
+.tbl{width:100%;border-collapse:collapse;font-size:11.5px}
+.tbl th{font:600 9.5px var(--f-mono);letter-spacing:.05em;color:var(--tx3);text-align:left;padding:6px 8px;border-bottom:1px solid var(--line2);white-space:nowrap;background:var(--bg1)}
+.tbl td{padding:5px 8px;border-bottom:1px solid var(--line);white-space:nowrap;height:28px}
+.tbl tr:last-child td{border-bottom:0}
+.tbl .n,.tbl th.n{text-align:right;font-family:var(--f-mono)}
+.tbl tbody tr:hover td{background:var(--bg2)}
+.tbl tr.sel td{background:var(--sig-bg)}
+.tbl tr.sel td:first-child{box-shadow:inset 2px 0 0 var(--sig)}
+.tbl tr.click{cursor:pointer}
+.tbl .sub{color:var(--tx3);font-size:10.5px}
+.tbl.dense td{height:26px;padding:4px 8px}
+.bar-in{display:inline-block;height:4px;background:var(--sig);vertical-align:middle;margin-left:6px;opacity:.8}
+
+/* ---------- Models ---------- */
+.mg{display:grid;grid-template-columns:minmax(0,1fr) 330px;gap:10px}
+.gate-row{display:grid;grid-template-columns:92px 1fr 40px;align-items:center;gap:8px;height:20px;font-size:10.5px}
+.gate-row .gb{height:8px;background:var(--bg3);position:relative}
+.gate-row .gb b{position:absolute;left:0;top:0;bottom:0}
+.gate-row .gb i{position:absolute;top:-4px;bottom:-4px;border-left:1.5px solid var(--up)}
+.gate-row em{font:10.5px var(--f-mono);font-style:normal;text-align:right}
+.gate-row span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;color:var(--tx2)}
+.gate-row.on span{color:var(--tx);font-weight:600}
+.gsec{font:600 9.5px var(--f-mono);letter-spacing:.08em;color:var(--tx3);margin:8px 0 4px;display:flex;justify-content:space-between}
+.verdict{margin-top:10px;border:1px solid var(--line);background:var(--bg);padding:8px 9px}
+.vrow{display:flex;justify-content:space-between;align-items:center;font-size:11px;height:22px;color:var(--tx2)}
+.vrow b{font:11px var(--f-mono);color:var(--tx)}
+
+/* ---------- Portfolio ---------- */
+.pfg{display:grid;grid-template-columns:292px minmax(0,1fr);gap:10px}
+.sl{padding:7px 0 6px;border-bottom:1px solid var(--line)}
+.sl:last-of-type{border-bottom:0}
+.slh{display:flex;justify-content:space-between;align-items:baseline;font-size:11px;color:var(--tx2)}
+.slh b{font:600 12px var(--f-mono);color:var(--sig)}
+.sls{display:flex;justify-content:space-between;font-size:9.5px;color:var(--tx3);margin-top:-1px}
+input[type=range]{-webkit-appearance:none;appearance:none;width:100%;height:18px;background:transparent;cursor:pointer;display:block;--p:50%}
+input[type=range]:focus{outline:none}
+input[type=range]::-webkit-slider-runnable-track{height:2px;background:linear-gradient(to right,var(--sig) var(--p),var(--line2) var(--p))}
+input[type=range]::-webkit-slider-thumb{-webkit-appearance:none;width:9px;height:15px;margin-top:-6.5px;background:var(--bg1);border:1.5px solid var(--sig);border-radius:1px}
+input[type=range]::-moz-range-track{height:2px;background:var(--line2)}
+input[type=range]::-moz-range-progress{height:2px;background:var(--sig)}
+input[type=range]::-moz-range-thumb{width:8px;height:14px;background:var(--bg1);border:1.5px solid var(--sig);border-radius:1px}
+.code{background:var(--bg);border:1px solid var(--line);font:10.5px/17px var(--f-mono);padding:6px 8px;color:var(--tx2);white-space:pre;overflow:hidden;margin-top:8px}
+.code .hl{color:var(--sig);font-weight:600}
+.solv{display:flex;align-items:center;gap:6px;font:10px var(--f-mono);color:var(--tx3);margin-top:8px}
+
+/* ---------- Backtest / Data / Shadow ---------- */
+.bg2{display:grid;grid-template-columns:minmax(0,1.15fr) minmax(0,1fr);gap:10px}
+.attr{display:flex;height:22px;border:1px solid var(--line);margin:4px 0 8px}
+.attr div{display:flex;align-items:center;justify-content:center;font:600 10px var(--f-mono);color:var(--on-sig);white-space:nowrap;overflow:hidden;transition:flex .3s}
+.guard{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:6px}
+.gc{border:1px solid var(--line);border-left:2px solid var(--pass);background:var(--bg);padding:7px 9px}
+.gc .gh{display:flex;justify-content:space-between;align-items:center;font-size:11px;font-weight:600}
+.gc .gv{font:600 15px var(--f-mono);margin-top:2px;color:var(--pass)}
+.gc p{font-size:10.5px;line-height:1.45;color:var(--tx3);margin-top:1px}
+.ph .lg{flex-wrap:nowrap}
+.st{display:inline-flex;align-items:center;gap:5px;font:600 10px var(--f-mono)}
+.st i{width:6px;height:6px;display:inline-block}
+.sg2{display:grid;grid-template-columns:minmax(0,1fr) 280px;gap:10px}
+.sigf{font:10.5px/1.75 var(--f-mono);color:var(--tx2)}
+.sigf div{display:flex;justify-content:space-between;border-bottom:1px solid var(--line);padding:3px 0}
+
+/* ---------- Bot ---------- */
+.bot{border-left:1px solid var(--line);background:var(--bg1);display:flex;flex-direction:column;min-width:0;min-height:0;overflow:hidden}
+.bhd{padding:9px 10px 0}
+.btop{display:flex;align-items:center;gap:6px;font:600 9.5px var(--f-mono);letter-spacing:.08em;color:var(--tx3);white-space:nowrap}
+.btop .sv{margin-left:auto;display:flex;align-items:center;gap:5px;color:var(--pass);letter-spacing:.02em}
+.bsub{font:10px var(--f-mono);color:var(--tx3);margin-top:3px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.btabs{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:4px;margin-top:8px}
+.btab{border:1px solid var(--line2);padding:5px 6px 5px;text-align:left;border-radius:2px;position:relative;min-width:0;color:var(--tx2)}
+.btab:hover{border-color:var(--tx3);color:var(--tx)}
+.btab.on{border-color:var(--sig);background:var(--sig-bg);color:var(--tx)}
+.btab b{display:flex;align-items:center;gap:4px;font-size:11px;font-weight:620;white-space:nowrap}
+.btab b svg{flex:none;color:var(--sig)}
+.btab b sup{font:600 8.5px var(--f-mono);color:var(--mem);border:1px solid var(--mem-line);padding:0 2px;vertical-align:0}
+.btab small{display:block;font-size:9.5px;color:var(--tx3);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.btab .unr{position:absolute;top:-6px;right:-5px;min-width:14px;height:14px;padding:0 3px;background:var(--up);color:#fff;font:600 9px/14px var(--f-mono);text-align:center;border-radius:1px}
+.ctxbar{margin:8px 10px 0;border:1px dashed var(--line2);padding:6px 7px 5px;background:var(--bg)}
+.ctxl{display:flex;justify-content:space-between;align-items:center;font:600 9px var(--f-mono);color:var(--tx3);letter-spacing:.06em}
+.cchips{display:flex;flex-wrap:wrap;gap:4px;margin:5px 0 4px}
+.cc{font:10px/1.5 var(--f-mono);padding:0 5px;border:1px solid var(--sig-line);color:var(--sig);background:var(--sig-bg);border-radius:1px;white-space:nowrap}
+.cc.fl{animation:chg 1.2s}
+.kvs{display:flex;align-items:center;gap:5px;font:9.5px var(--f-mono);color:var(--pass);white-space:nowrap}
+.kvs span{color:var(--tx3)}
+.thread{flex:1;overflow-y:auto;padding:10px 10px 12px;display:flex;flex-direction:column;gap:8px;min-height:0}
+.thread>*{flex-shrink:0}
+.m-sys{display:flex;gap:6px;align-items:flex-start;font-size:10.5px;color:var(--tx3);border-left:2px solid var(--line2);padding:2px 0 2px 7px;line-height:1.5}
+.m-sys svg{flex:none;margin-top:2px}
+.m-sys code{font:10px var(--f-mono);color:var(--tx2)}
+.m-sys .mt{margin-left:auto;padding-left:6px}
+.mt{font:9.5px var(--f-mono);color:var(--tx3);white-space:nowrap}
+.m-user{align-self:flex-end;max-width:90%}
+.m-user .ubb{background:var(--bg3);border:1px solid var(--line2);padding:6px 9px;border-radius:2px;font-size:11.5px;line-height:1.55;word-break:break-all}
+.m-user .um{text-align:right;margin-top:2px}
+.m-bot .bhh{display:flex;align-items:center;gap:6px;font-size:10.5px;color:var(--tx2);margin-bottom:3px;font-weight:600}
+.m-bot .bhh svg{color:var(--sig)}
+.m-bot .bhh .mt{margin-left:auto;font-weight:400}
+.m-bot .bb{font-size:11.5px;line-height:1.62;color:var(--tx)}
+.bb b{font-weight:620}
+.bb code,.a2b code{font:10.5px var(--f-mono);background:var(--bg3);padding:0 3px;border-radius:1px}
+.bb ul{padding-left:14px;margin-top:2px}
+.m-tr{border:1px solid var(--line);background:var(--bg);border-radius:2px}
+.trh{display:flex;align-items:center;gap:6px;width:100%;padding:5px 7px;font-size:10.5px;text-align:left}
+.trh svg{transition:transform .15s;color:var(--tx3);flex:none}
+.m-tr.open .trh>svg{transform:rotate(90deg)}
+.trh .tn{font-family:var(--f-mono);color:var(--tx)}
+.trm{margin-left:auto;color:var(--tx3);font:10px var(--f-mono)}
+.trk{font:600 8.5px var(--f-mono);color:var(--sig);border:1px solid var(--sig-line);padding:0 3px}
+.trk.ok{color:var(--pass);border-color:color-mix(in srgb,var(--pass) 35%,transparent)}
+.trb{display:none;border-top:1px solid var(--line);padding:5px 8px 7px;max-height:236px;overflow:auto}
+.m-tr.open .trb{display:block}
+.trs{font:600 9px var(--f-mono);color:var(--tx3);letter-spacing:.1em;margin:3px 0 1px}
+.trb pre{font:10px/1.5 var(--f-mono);white-space:pre;color:var(--tx2)}
+.jk{color:var(--sig)}.js{color:var(--syn-str)}.jn{color:var(--syn-num)}.jb{color:var(--syn-var)}
+.m-mem{border:1px solid var(--mem-line);background:var(--mem-bg);padding:6px 8px;border-radius:2px;font-size:11px;line-height:1.55;color:var(--tx2)}
+.m-mem .mh{display:flex;align-items:center;gap:6px;font:600 10px var(--f-mono);color:var(--mem);margin-bottom:2px}
+.m-mem .mh em{margin-left:auto;font-style:normal;font-weight:400;color:var(--tx3)}
+.a2ui{border:1px solid var(--sig-line);background:var(--bg);border-radius:2px;overflow:hidden}
+.a2h{display:flex;align-items:center;gap:6px;padding:4px 8px;background:var(--sig-bg);font:600 9.5px var(--f-mono);color:var(--sig);border-bottom:1px solid var(--sig-line);white-space:nowrap}
+.a2h .a2s{color:var(--tx3);font-weight:400;overflow:hidden;text-overflow:ellipsis}
+.a2t{padding:7px 9px 0;font-weight:620;font-size:11.5px;line-height:1.5}
+.a2b{padding:5px 9px 8px;font-size:11px;color:var(--tx2);line-height:1.55}
+.a2g{display:grid;grid-template-columns:1fr auto auto;gap:3px 10px;font-size:10.5px;margin-top:6px;border-top:1px solid var(--line);padding-top:6px}
+.a2g span{color:var(--tx3)}
+.a2g b{font:500 10.5px var(--f-mono);color:var(--tx2);text-align:right}
+.a2g b.to{color:var(--sig);font-weight:600}
+.a2m{margin-top:6px;height:18px;position:relative;background:var(--bg3)}
+.a2m .z{position:absolute;left:50%;top:0;bottom:0;width:1px;background:var(--tx3)}
+.a2m .lim{position:absolute;top:-2px;bottom:-2px;border-left:1px dashed var(--up)}
+.a2m .new{position:absolute;top:-2px;bottom:-2px;border-left:1.5px solid var(--sig)}
+.a2m b{position:absolute;top:5px;height:8px;background:var(--up)}
+.a2a{display:flex;gap:5px;padding:0 9px 9px;flex-wrap:wrap}
+.a2d{padding:6px 9px;border-top:1px solid var(--line);color:var(--pass);font:10.5px var(--f-mono);display:flex;gap:5px;align-items:center}
+.a2ui.done{border-color:var(--line2)}
+.a2ui.done .a2h{background:var(--bg2);color:var(--tx3);border-color:var(--line)}
+.m-think{display:flex;gap:4px;align-items:center;font:10.5px var(--f-mono);color:var(--tx3);padding:2px 0}
+.m-think i{width:4px;height:4px;background:var(--sig);animation:blink 1s infinite}
+.m-think i:nth-child(2){animation-delay:.15s}.m-think i:nth-child(3){animation-delay:.3s}
+.m-think span{margin-left:4px}
+@keyframes blink{0%,100%{opacity:.2}50%{opacity:1}}
+.bcmds{display:grid;grid-template-columns:1fr 1fr;gap:4px;padding:8px 10px 0;border-top:1px solid var(--line)}
+.bcmd{font:10.5px var(--f-mono);text-align:left;padding:5px 7px;border:1px solid var(--line2);color:var(--tx2);border-radius:2px;display:flex;align-items:center;gap:6px;white-space:nowrap}
+.bcmd svg{color:var(--sig);flex:none}
+.bcmd:hover{border-color:var(--sig);color:var(--tx)}
+.binput{display:flex;gap:6px;padding:7px 10px 10px;align-items:stretch}
+.binput textarea{flex:1;resize:none;height:50px;background:var(--bg);border:1px solid var(--line2);color:var(--tx);font:11.5px/1.45 var(--f-sans);padding:6px 8px;border-radius:2px;outline:none}
+.binput textarea:focus{border-color:var(--sig)}
+.binput textarea::placeholder{color:var(--tx3)}
+.sendb{width:34px;background:var(--sig);color:var(--on-sig);display:grid;place-items:center;border-radius:2px}
+.bfoot{display:flex;justify-content:space-between;padding:0 10px 8px;font:9.5px var(--f-mono);color:var(--tx3);margin-top:-4px}
+
+/* ---------- Chart primitives ---------- */
+.grid{stroke:var(--grid);stroke-width:1}
+.base{stroke:var(--tx3);stroke-width:1}
+.tick{stroke:var(--line2)}
+.ax{fill:var(--tx3);font-size:9.5px}
+.axl{fill:var(--tx2);font-size:10px}
+.band{fill:var(--warn);opacity:.06}
+.bandt{fill:var(--warn);font-size:9px;opacity:.85}
+.vx{stroke:var(--tx3);stroke-width:1;stroke-dasharray:2 2}
+.dot{stroke:var(--bg1);stroke-width:1.2}
+#tip{position:fixed;z-index:60;pointer-events:none;background:var(--bg3);border:1px solid var(--line2);padding:6px 8px;font:10.5px/1.55 var(--f-mono);color:var(--tx);box-shadow:var(--shadow);display:none;white-space:nowrap;border-radius:2px}
+#tip .th{color:var(--tx3);margin-bottom:2px;font-size:10px}
+#tip .tg2{display:grid;grid-template-columns:auto auto;gap:0 14px}
+#tip .tr{display:flex;align-items:center;gap:6px;justify-content:space-between}
+#tip .tr i{width:7px;height:7px;display:inline-block}
+#tip .tr span{color:var(--tx2)}
+</style>
+</head>
+<body>
+<header class="chrome">
+  <div class="brand">
+    <svg width="18" height="18" viewBox="0 0 18 18" fill="none"><rect x=".75" y=".75" width="16.5" height="16.5" stroke="currentColor" stroke-width="1.2" style="color:var(--line2)"/><path d="M4 13V10M7.5 13V7.5M11 13V9M14.5 13V4.5" stroke="currentColor" stroke-width="1.6" style="color:var(--sig)"/></svg>
+    <b>QuantLab Pro</b><span class="ver">V2.0 PRO-QUANT</span>
+  </div>
+  <div class="ctx">
+    <label class="fld"><span>UNIVERSE</span><select id="uniSel">
+      <option value="CSI500">中证 500 (CSI500)</option>
+      <option value="CSI300">沪深 300 (CSI300)</option>
+      <option value="CSI1000">中证 1000 (CSI1000)</option>
+      <option value="ALLA">全 A 剔除 ST 次新</option>
+    </select><svg class="chv" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="m6 9 6 6 6-6"/></svg></label>
+    <div class="fld"><span>PIT</span><b class="v" style="color:var(--tx)">2026-11-25 15:00 CST</b></div>
+    <div class="fld" id="uniMeta"><span>BENCH</span><b class="v">000905.SH · N=500</b></div>
+    <span class="prd">Q1.3</span>
+  </div>
+  <div class="rt">
+    <div class="hb" id="hb" title="Agent Home Daemon 心跳 · rtt 12ms"><i class="pulse"></i>Agent Home :27070 · Quant-Lead Bot <b>ONLINE</b><span class="prd">Q7.1</span></div>
+    <button class="tg" id="prdBtn" data-act="prd"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 3h8l10 10-8 8L3 11V3Z"/></svg>PRD 标注</button>
+    <div class="seg" id="themeSeg">
+      <button data-act="theme" data-v="dark"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 14.5A8 8 0 0 1 9.5 4 8 8 0 1 0 20 14.5Z"/></svg>机构深色</button>
+      <button data-act="theme" data-v="light"><svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="4"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>研究浅色</button>
+    </div>
+    <button class="ib on" id="botBtn" data-act="botToggle" title="折叠 / 展开 Agent Home Bot 侧栏"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16"/><path d="M15 4v16"/></svg></button>
+  </div>
+</header>
+<div class="app">
+  <nav class="nav" id="nav"></nav>
+  <main class="main" id="main"></main>
+  <aside class="bot" id="bot"></aside>
+</div>
+<div id="tip"></div>
+<script>
+'use strict';
+/* =====================================================================
+ * QuantLab Pro V2.0 · 单文件离线高保真原型（无外部依赖）
+ * ===================================================================== */
+const $ = (s, r = document) => r.querySelector(s);
+const $$ = (s, r = document) => [...r.querySelectorAll(s)];
+const clamp = (v, a, b) => Math.max(a, Math.min(b, v));
+const fx = (v, d = 2) => (Math.abs(v) < 0.5 * Math.pow(10, -d) ? 0 : v).toFixed(d);
+const sg = (v, d = 2) => { const s = fx(v, d); return (+s > 0 ? '+' : '') + s; };
+const esc = s => String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+const thou = v => Math.round(v).toString().replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+const now = () => { const d = new Date(); return [d.getHours(), d.getMinutes(), d.getSeconds()].map(x => String(x).padStart(2, '0')).join(':'); };
+
+function rng(seed) { let a = seed >>> 0; return function () { a = (a + 0x6D2B79F5) >>> 0; let t = a; t = Math.imul(t ^ (t >>> 15), t | 1); t ^= t + Math.imul(t ^ (t >>> 7), t | 61); return ((t ^ (t >>> 14)) >>> 0) / 4294967296; }; }
+function hash(s) { let h = 2166136261; for (let i = 0; i < s.length; i++) { h ^= s.charCodeAt(i); h = Math.imul(h, 16777619); } return h >>> 0; }
+function gauss(R) { let u = 0, v = 0; while (!u) u = R(); while (!v) v = R(); return Math.sqrt(-2 * Math.log(u)) * Math.cos(2 * Math.PI * v); }
+const mean = a => a.reduce((s, x) => s + x, 0) / a.length;
+const std = a => { const m = mean(a); return Math.sqrt(a.reduce((s, x) => s + (x - m) * (x - m), 0) / (a.length - 1)); };
+function rankArr(a) { const idx = a.map((v, i) => [v, i]).sort((x, y) => x[0] - y[0]); const r = new Array(a.length); idx.forEach(([, i], k) => { r[i] = k; }); return r; }
+function spearman(a, b) { const ra = rankArr(a), rb = rankArr(b), n = a.length; let d2 = 0; for (let i = 0; i < n; i++) d2 += (ra[i] - rb[i]) ** 2; return 1 - 6 * d2 / (n * (n * n - 1)); }
+function mixHex(a, b, t) { const p = h => [1, 3, 5].map(i => parseInt(h.slice(i, i + 2), 16)); const A = p(a), B = p(b); return '#' + A.map((x, i) => Math.round(x + (B[i] - x) * t).toString(16).padStart(2, '0')).join(''); }
+
+/* ---------- 图标（锐利几何 SVG） ---------- */
+const ICONS = {
+  alpha: '<path d="M18 5H6l6.5 7L6 19h12"/>',
+  models: '<path d="M12 3 3 7.5 12 12l9-4.5L12 3Z"/><path d="m3 12 9 4.5 9-4.5"/><path d="m3 16.5 9 4.5 9-4.5"/>',
+  portfolio: '<circle cx="12" cy="12" r="8"/><path d="M12 2v6M12 16v6M2 12h6M16 12h6"/>',
+  backtest: '<path d="M4 4v16h16"/><path d="m7 15 4-5 3 3 6-7"/>',
+  data: '<ellipse cx="12" cy="6" rx="7" ry="2.6"/><path d="M5 6v12c0 1.4 3.1 2.6 7 2.6s7-1.2 7-2.6V6"/><path d="M5 12c0 1.4 3.1 2.6 7 2.6s7-1.2 7-2.6"/>',
+  shadow: '<path d="M3 12h4l2.5-6 5 12 2.5-6H21"/>',
+  play: '<path d="M7 4v16l13-8L7 4Z"/>',
+  send: '<path d="M3 11 21 3l-8 18-2-8-8-2Z"/>',
+  chev: '<path d="m9 6 6 6-6 6"/>',
+  check: '<path d="m5 12 5 5 9-10"/>',
+  x: '<path d="M6 6l12 12M18 6 6 18"/>',
+  warn: '<path d="M12 3 2 20h20L12 3Z"/><path d="M12 10v4M12 17v.5"/>',
+  bolt: '<path d="M13 2 4 14h7l-1 8 9-12h-7l1-8Z"/>',
+  clock: '<circle cx="12" cy="12" r="8.5"/><path d="M12 7v5l3 2"/>',
+  mem: '<path d="M4 5h16v14H4z"/><path d="M8 9h8M8 13h5M4 9H2M4 15H2M22 9h-2M22 15h-2"/>',
+  shield: '<path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6l-8-3Z"/><path d="m8.5 12 2.5 2.5 4.5-5"/>',
+  lock: '<rect x="5" y="11" width="14" height="10"/><path d="M8 11V7a4 4 0 0 1 8 0v4"/>',
+  hex: '<path d="M12 2.5 20.5 7.3v9.4L12 21.5 3.5 16.7V7.3L12 2.5Z"/><circle cx="12" cy="12" r="2.6"/>',
+  dia: '<path d="M12 2.5 21.5 12 12 21.5 2.5 12 12 2.5Z"/><path d="M12 7.5v9M7.5 12h9"/>',
+  sq: '<rect x="4" y="4" width="16" height="16"/><path d="M4 20 20 4"/><path d="M12 20l8-8"/>',
+  term: '<rect x="3" y="4" width="18" height="16"/><path d="m7 9 3 3-3 3M12 15h5"/>',
+  file: '<path d="M6 2h9l5 5v15H6V2Z"/><path d="M14 2v6h6"/>',
+  route: '<circle cx="6" cy="6" r="2.5"/><circle cx="18" cy="18" r="2.5"/><path d="M8.5 6H15a3 3 0 0 1 0 6H9a3 3 0 0 0 0 6h6.5"/>',
+  sync: '<path d="M4 12a8 8 0 0 1 14-5.3L20 9M20 4v5h-5"/><path d="M20 12a8 8 0 0 1-14 5.3L4 15M4 20v-5h5"/>'
+};
+const ic = (n, s = 16, sw = 1.6) => `<svg width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="${sw}" stroke-linecap="square" stroke-linejoin="miter">${ICONS[n] || ''}</svg>`;
+const prd = id => `<span class="prd">${id}</span>`;
+const tag = (cls, t) => `<span class="tag ${cls}">${t}</span>`;
+
+/* =====================================================================
+ * 全局状态（支持 URL 参数 ?view=&theme=&prd=1）
+ * ===================================================================== */
+const QS = new URLSearchParams(location.search);
+const VIEWS = ['alpha', 'models', 'portfolio', 'backtest', 'data', 'shadow'];
+const S = {
+  view: VIEWS.includes(QS.get('view')) ? QS.get('view') : 'alpha',
+  theme: QS.get('theme') === 'light' ? 'light' : 'dark',
+  prd: QS.get('prd') === '1',
+  botOpen: QS.get('bot') !== '0',
+  uni: 'CSI500',
+  factor: 'alpha_vp_corr_20d',
+  pipe: { mad: true, ind: true, size: true, barra: true, st: true },
+  alphaAlt: 'lag',
+  exp: 'rd42',
+  engine: 'event',
+  pf: { wmax: 2.0, ind: 3.0, lam: 0.6, te: 5.0, size: 0.8 },
+  obj: 'ir',
+  bot: 'lead'
+};
+const ALLON = { mad: true, ind: true, size: true, barra: true, st: true };
+
+const UNI = {
+  CSI500: { label: '中证 500', code: '000905.SH', n: 500, ic: 1.00, to: 1.00, ex: 1.00, beta: 1.00, drift: 0.000, sz: 1.00, imp: 1.00 },
+  CSI300: { label: '沪深 300', code: '000300.SH', n: 300, ic: 0.82, to: 0.86, ex: 0.74, beta: 0.76, drift: -0.012, sz: 0.72, imp: 0.72 },
+  CSI1000: { label: '中证 1000', code: '000852.SH', n: 1000, ic: 1.12, to: 1.10, ex: 1.21, beta: 1.24, drift: 0.004, sz: 1.12, imp: 1.32 },
+  ALLA: { label: '全 A 剔除 ST 次新', code: 'ALL-A ex ST', n: 4862, ic: 1.06, to: 1.05, ex: 1.12, beta: 1.10, drift: 0.008, sz: 1.06, imp: 1.18 }
+};
+
+/* ---------- 交易日序列（2024-01-02 → 2026-11-25） ---------- */
+function bdays(from, to) { const out = []; const d = new Date(from + 'T00:00:00Z'), e = new Date(to + 'T00:00:00Z'); while (d <= e) { const w = d.getUTCDay(); if (w && w < 6) out.push(d.toISOString().slice(0, 10)); d.setUTCDate(d.getUTCDate() + 1); } return out; }
+const DAYS = bdays('2024-01-02', '2026-11-25');
+const YRS = DAYS.length / 260;
+function idxOf(xs, d) { for (let i = 0; i < xs.length; i++) if (xs[i] >= d) return i; return xs.length - 1; }
+
+/* 宽基指数锚点（对数线性插值 + AR(1) 扰动），刻画 2024 微盘踩踏 / 924 政策急升 / 2025-04 关税冲击 */
+const ANCH = [['2024-01-02', 1], ['2024-02-05', .76], ['2024-03-21', .93], ['2024-05-20', .95], ['2024-09-13', .79], ['2024-10-08', 1.06], ['2025-01-13', .96], ['2025-03-18', 1.04], ['2025-04-08', .93], ['2025-08-29', 1.16], ['2025-11-20', 1.19], ['2026-02-27', 1.25], ['2026-06-30', 1.2], ['2026-11-25', 1.29]];
+const MKT = {};
+function market(uk) {
+  if (MKT[uk]) return MKT[uk];
+  const u = UNI[uk], R = rng(hash('mkt' + uk));
+  const ai = ANCH.map(([d, v]) => [idxOf(DAYS, d), Math.log(v)]);
+  let n = 0, j = 0; const out = [];
+  for (let i = 0; i < DAYS.length; i++) {
+    while (j < ai.length - 2 && ai[j + 1][0] <= i) j++;
+    const [i0, v0] = ai[j], [i1, v1] = ai[j + 1];
+    const base = v0 + (v1 - v0) * clamp((i - i0) / ((i1 - i0) || 1), 0, 1);
+    n = 0.9 * n + 0.0105 * gauss(R);
+    out.push(Math.exp(base * u.beta + n * u.beta + u.drift * i / 260));
+  }
+  const b0 = out[0];
+  return (MKT[uk] = out.map(v => v / b0));
+}
+function shockLv(d) {
+  const seg = (a, b, va, vb) => { const ta = Date.parse(a), tb = Date.parse(b), t = Date.parse(d); return va + (vb - va) * (t - ta) / (tb - ta); };
+  let s = 0;
+  if (d >= '2024-01-15') s = d < '2024-02-07' ? seg('2024-01-15', '2024-02-07', 0, -1) : d < '2024-03-20' ? seg('2024-02-07', '2024-03-20', -1, -.45) : -.45;
+  if (d >= '2025-04-01') s += d < '2025-04-09' ? seg('2025-04-01', '2025-04-09', 0, -.4) : d < '2025-05-06' ? seg('2025-04-09', '2025-05-06', -.4, -.1) : -.1;
+  return s;
+}
+const CYC = [{ a: '2024-01-15', b: '2024-02-20', label: '微盘踩踏' }, { a: '2024-09-24', b: '2024-10-16', label: '924 急升' }, { a: '2025-04-03', b: '2025-04-28', label: '关税冲击' }];
+
+/* =====================================================================
+ * Q2 · 因子定义与评估模型
+ * ===================================================================== */
+const FAC = {
+  alpha_vp_corr_20d: {
+    name: '量价背离相关性 20D', lang: 'Polars Expr', ic: .052, icir: 2.41, t: 6.8, ls: 21.4, top: 11.8, to: 18.6, hl: 7.2, sk: .07,
+    corr: [1, .46, -.12, .38, .29, .08], exp: { size: .06, mom: -.08, vol: .11, liq: .09, ind: .08 },
+    code: `# Q2.1 量价背离相关性：价格涨跌与成交量变化的 20D 滚动相关
+def alpha_vp_corr_20d(df: pl.LazyFrame) -> pl.Expr:
+    ret = pl.col("close").pct_change().over("code")
+    dv  = pl.col("volume").log1p().diff().over("code")
+    rho = pl.rolling_corr(ret, dv, window_size=20).over("code")
+    return (-rho).rank().over("trade_date")   # 背离越强得分越高`
+  },
+  alpha_mom_resid_60d: {
+    name: '行业市值中性残差动量 60D', lang: 'Qlib DSL', ic: .038, icir: 2.02, t: 5.1, ls: 15.6, top: 8.9, to: 9.4, hl: 21.0, sk: .05,
+    corr: [1, -.21, .58, -.06, -.14, .12], exp: { size: -.04, mom: .14, vol: -.06, liq: -.05, ind: .07 },
+    code: `# Q2.1 残差动量：剔除最近 5D 反转，对申万一级 + 对数市值回归取残差
+$ret_60_5 = Ref($close, 5) / Ref($close, 60) - 1
+$resid    = CSResidual($ret_60_5, C($sw_l1) + Log($float_mv))
+$vol_adj  = $resid / Std($ret_1d, 60)
+alpha     = CSRank(Mean($vol_adj, 5))`
+  },
+  alpha_earn_sue_pit: {
+    name: 'PIT 业绩超预期 SUE', lang: 'Python · PIT', ic: .044, icir: 3.12, t: 8.4, ls: 17.2, top: 10.6, to: 8.1, hl: 38.0, sk: .025,
+    corr: [1, .04, .22, -.09, -.17, .31], exp: { size: .03, mom: .07, vol: -.09, liq: -.04, ind: .06 },
+    code: `# Q2.1 标准化未预期盈余：严格按 ann_date 生效，杜绝财报重述未来函数
+q     = pit_fina("income", field="n_income_attr_p", asof="ann_date")
+yoy   = q.ttm_q(0) - q.ttm_q(4)
+sue   = yoy / q.diff_q(lags=8).std()
+alpha = cs_winsor(sue, mad=3.5).cs_zscore()`
+  },
+  alpha_smart_money_vwap: {
+    name: '尾盘聪明钱 VWAP 偏离', lang: 'Polars · 1min', ic: .061, icir: 2.18, t: 6.1, ls: 24.8, top: 13.9, to: 24.3, hl: 4.1, sk: .09,
+    corr: [1, .41, -.05, .74, .33, .02], exp: { size: .09, mom: -.03, vol: .14, liq: .19, ind: .09 },
+    code: `# Q2.1 尾盘聪明钱：14:30-15:00 成交量加权价相对全日 VWAP 的偏离
+tail  = bars_1m.filter(pl.col("time") >= "14:30").vwap()
+full  = bars_1m.vwap()
+S     = (tail / full - 1) * (tail.volume / full.volume).sqrt()
+alpha = ts_mean(S, 10).cs_rank()`
+  }
+};
+const LIB = ['rev_20d', 'mom_120d', 'liq_turn_20d', 'vol_idio_20d', 'ep_ttm'];
+const LIBS = ['REV20', 'MOM120', 'LIQ20', 'IVOL20', 'EP'];
+const LIBC = [[1, -.18, .52, .44, .06], [-.18, 1, -.11, -.23, .09], [.52, -.11, 1, .61, -.04], [.44, -.23, .61, 1, -.19], [.06, .09, -.04, -.19, 1]];
+const PIPE = [
+  { k: 'mad', label: 'MAD 3.5x 去极值', short: 'MAD' },
+  { k: 'ind', label: '申万一级行业中性化', short: 'IND' },
+  { k: 'size', label: '对数流通市值中性化', short: 'SIZE' },
+  { k: 'barra', label: 'Barra 风格正交', short: 'BARRA' },
+  { k: 'st', label: '剔除涨跌停/ST', short: 'ST' }
+];
+
+function evalFactor(fid = S.factor, pipe = S.pipe, uk = S.uni) {
+  const f = FAC[fid], u = UNI[uk];
+  let ic = f.ic * u.ic, icir = f.icir * (0.92 + 0.08 * u.ic), t = f.t * (0.9 + 0.1 * u.ic), ls = f.ls * u.ex, top = f.top * u.ex, to = f.to * u.to, hl = f.hl, mcAdd = 0;
+  const ex = { ...f.exp }; let disp = 0.45;
+  if (!pipe.mad) { ic *= .93; icir -= .38; t -= 1.1; ls -= 1.4; ex.vol += .09; mcAdd += .02; disp += 1.1; }
+  if (!pipe.ind) { ic += .003; icir -= .42; t -= .9; ls -= 1.9; mcAdd += .05; ex.ind += .38; disp += .4; }
+  if (!pipe.size) { ic += .007; icir -= .55; t -= .6; ls += 1.1; ex.size += .58 * u.sz; ex.liq += .12; mcAdd += .06; }
+  if (!pipe.barra) { icir -= .22; t -= .4; mcAdd += .13; ex.mom += .24; ex.vol += .21; ex.liq += .17; }
+  if (!pipe.st) { to += 2.1; ls += 2.6; top += 1.6; t += .3; hl *= .92; }
+  const corr = f.corr.map((c, i) => i === 0 ? 1 : clamp(Math.sign(c) * (Math.abs(c) + mcAdd * (Math.abs(c) > .2 ? 1 : .5)), -.99, .99));
+  let mc = 0, mi = 1; corr.forEach((c, i) => { if (i && Math.abs(c) > mc) { mc = Math.abs(c); mi = i; } });
+  return { ic, icir, t, ls, top, to, hl, mc, mcWith: LIB[mi - 1], corr, ex, disp };
+}
+
+const AD = { key: '', val: null };
+const DCOL = Array.from({ length: 10 }, (_, j) => j < 5 ? mixHex('#26A69A', '#7C8794', j / 4.5) : mixHex('#7C8794', '#EF5350', (j - 4.5) / 4.5));
+function alphaData() {
+  const key = S.factor + '|' + S.uni + '|' + JSON.stringify(S.pipe);
+  if (AD.key === key) return AD.val;
+  const f = FAC[S.factor], m = evalFactor(), R = rng(hash(S.factor + S.uni));
+  const mk = market(S.uni);
+  const wi = []; for (let i = 0; i < DAYS.length; i += 5) wi.push(i); if (wi[wi.length - 1] !== DAYS.length - 1) wi.push(DAYS.length - 1);
+  const wx = wi.map(i => DAYS[i]);
+  const Q10 = m.top, Q1 = m.top - m.ls;
+  const e = Array.from({ length: 10 }, (_, j) => Q1 + (Q10 - Q1) * Math.pow(j / 9, 1.12) + (j > 0 && j < 9 ? (R() - .5) * m.disp : 0));
+  const dec = e.map((ej, j) => { let n = 0; const Rj = rng(hash(S.factor + S.uni + j)); return wi.map((di) => { n = .9 * n + .0042 * gauss(Rj); const ty = di / 260; return Math.exp(Math.log(mk[di]) + Math.log(1 + ej / 100) * ty + (j - 4.5) / 4.5 * .5 * shockLv(DAYS[di]) * f.sk + n); }); });
+  const bm = wi.map(di => mk[di]);
+  const ls = dec[9].map((v, k) => v / dec[0][k]);
+  const realized = dec.map(s => Math.pow(s[s.length - 1] / s[0], 1 / YRS) - 1);
+  const mono = spearman(realized, realized.map((_, j) => j));
+  const ii = []; for (let i = 60; i < DAYS.length; i += 10) ii.push(i);
+  const icx = ii.map(i => DAYS[i]);
+  let nn = 0; const Ri = rng(hash('ic' + S.factor + S.uni));
+  const noise = ii.map(() => (nn = .78 * nn + .023 * gauss(Ri)));
+  const shock = icx.map(d => ((d >= '2024-01-15' && d <= '2024-02-23') ? -.075 : (d >= '2025-04-01' && d <= '2025-04-28') ? -.05 : 0) * f.sk / .07);
+  const nm = mean(noise), sm = mean(shock), scale = S.pipe.mad ? 1 : 1.35;
+  const icv = noise.map((v, k) => m.ic + (v - nm) * scale + (shock[k] - sm));
+  let c = 0; const cum = icv.map(v => (c += v));
+  const lagL = [1, 3, 5, 10, 20, 60];
+  const lag = lagL.map((l, k) => m.ic * Math.exp(-Math.LN2 * (l - 1) / m.hl) + (k ? (R() - .5) * .002 : 0));
+  const INDN = ['电子', '计算机', '医药', '电新', '机械', '化工', '汽车', '有色', '食饮', '银行', '非银', '军工'];
+  const Rn = rng(hash('ind' + S.factor + S.uni));
+  const ind = INDN.map(() => m.ic + (Rn() - .5) * (S.pipe.ind ? .05 : .085) - (S.factor === 'alpha_earn_sue_pit' ? 0 : .002));
+  const M = [m.corr].concat(LIBC.map((r, i) => [m.corr[i + 1]].concat(r)));
+  return (AD.key = key, AD.val = { wx, dec, bm, ls, mono, icx, icv, cum, lagL, lag, INDN, ind, M, posRatio: icv.filter(v => v > 0).length / icv.length });
+}
+
+/* =====================================================================
+ * Q3 · 实验注册表
+ * ===================================================================== */
+const EXPS = [
+  { id: 'ols', code: 'EXP-0419', name: 'OLS-ICIR 加权', feat: '6 因子 · 线性', is: 2.08, oos: 1.79, pbo: .07, dsr: .98, ex: 10.4, gate: 'BASELINE' },
+  { id: 'ridge', code: 'EXP-0425', name: 'Ridge L2', feat: '42 因子 · α=0.8', is: 2.24, oos: 1.88, pbo: .09, dsr: .98, ex: 11.1, gate: 'PASS' },
+  { id: 'lgbm', code: 'EXP-0427', name: 'LightGBM 截面排序', feat: '158 因子 · lambdarank', is: 2.71, oos: 2.12, pbo: .12, dsr: .99, ex: 13.6, gate: 'PROMOTED' },
+  { id: 'cat', code: 'EXP-0424', name: 'CatBoost + 时序特征', feat: '182 特征 · depth 8', is: 2.95, oos: 1.71, pbo: .22, dsr: .91, ex: 10.2, gate: 'HOLD' },
+  { id: 'rd42', code: 'RDA-0042', name: 'RD-Agent 候选 #42', feat: 'LLM 生成 · 17 层算子', is: 3.42, oos: .63, pbo: .41, dsr: .58, ex: 3.1, gate: 'REJECTED' }
+];
+const gateTag = e => e.gate === 'PROMOTED' ? tag('pass', 'PROMOTED') : e.gate === 'PASS' ? tag('info', 'PASS') : e.gate === 'BASELINE' ? tag('mute', 'PASS · BASELINE') : e.gate === 'HOLD' ? tag('warn', 'HOLD: DSR&lt;0.95') : tag('fail', 'REJECTED: PBO&gt;0.25');
+const CPCV_PAIRS = (() => { const p = []; for (let a = 1; a <= 6; a++) for (let b = a + 1; b <= 6; b++) p.push('G' + a + '+G' + b); return p; })();
+function cpcvPaths(e) {
+  const R = rng(hash('cpcv' + e.id)); const sd = .32 + (e.is - e.oos) * .36;
+  const z = CPCV_PAIRS.map(() => gauss(R)); const zm = mean(z), zs = std(z);
+  return z.map(v => e.oos + (v - zm) / zs * sd);
+}
+const WF = [['2022-07-01', '2022-12-31', 1.42], ['2023-01-01', '2023-06-30', 1.88], ['2023-07-01', '2023-12-31', 2.31], ['2024-01-01', '2024-06-30', .74], ['2024-07-01', '2024-12-31', 1.96], ['2025-01-01', '2025-06-30', 2.18], ['2025-07-01', '2025-12-31', 2.44], ['2026-01-01', '2026-06-30', 1.83], ['2026-07-01', '2026-11-25', 2.05]];
+function wfIR(e) { const R = rng(hash('wf' + e.id)); return WF.map(w => w[2] * e.oos / 2.12 + (R() - .5) * (e.is - e.oos) * .95); }
+
+/* =====================================================================
+ * Q4 · cvxpy 组合优化代理模型（实时重算）
+ * ===================================================================== */
+const BARRA = [['size', 'Size'], ['beta', 'Beta'], ['mom', 'Momentum'], ['rvol', 'Residual Vol'], ['nls', 'Nonlinear Size'], ['btop', 'BTOP'], ['liq', 'Liquidity'], ['ey', 'Earnings Yield'], ['gro', 'Growth'], ['lev', 'Leverage']];
+const PRE = { size: .74, beta: .18, mom: .31, rvol: -.42, nls: .36, btop: .22, liq: -.38, ey: .27, gro: .14, lev: -.09 };
+const SW = ['电子', '计算', '医药', '电新', '机械', '化工', '汽车', '有色', '食饮', '银行', '非银', '军工', '通信', '传媒', '公用', '交运', '地产', '建材', '建筑', '钢铁', '煤炭', '石化', '农林', '家电', '轻工', '纺服', '商贸', '社服', '美护', '环保', '综合'];
+const DEV0 = [2.8, 1.6, -1.9, -1.2, .9, .7, -.6, 2.4, -1.4, -1.2, -1.7, .4, 1.1, .8, -.9, -.5, -.8, -.3, -.4, .3, -.7, -.4, .2, .5, .6, -.2, -.3, .1, -.2, .3, 0];
+const HOLD = [
+  ['002463.SZ', '沪电股份', '电子', 2.31, .62, 1.6, 'PASS', 1.0], ['600183.SH', '生益科技', '电子', 2.18, .55, 2.0, 'PASS', 1.1], ['000988.SZ', '华工科技', '电子', 2.05, .41, 1.2, 'PASS', 1.3],
+  ['601168.SH', '西部矿业', '有色', 1.96, .38, 1.9, 'PASS', 1.2], ['000630.SZ', '铜陵有色', '有色', 1.88, .35, 1.1, 'T1', 1.0], ['600536.SH', '中国软件', '计算', 1.74, .29, 0, 'PASS', 1.6],
+  ['002558.SZ', '巨人网络', '传媒', 1.66, .31, 1.4, 'LIMIT', 1.4], ['600966.SH', '博汇纸业', '轻工', 1.52, .12, .8, 'PASS', 2.1], ['000831.SZ', '中国稀土', '有色', 1.47, .33, 1.5, 'POV', 1.8],
+  ['601233.SH', '桐昆股份', '化工', 1.41, .27, .6, 'PASS', 1.5]
+];
+function optimize(p = S.pf, uk = S.uni) {
+  const u = UNI[uk];
+  const teF = 1 - Math.exp(-(p.te - 1.5) / 2.1), wF = .86 + .14 * Math.min(1, (p.wmax - 1) / 2.5), iF = .9 + .1 * Math.min(1, (p.ind - 1) / 3), sF = .88 + .12 * clamp((p.size - .2) / .6, 0, 1), lF = 1 - .045 * p.lam;
+  const OBJ = { ir: [1, 1], mv: [.97, 1.06], rp: [.74, .72] }[S.obj] || [1, 1];
+  const gross = 19.5 * u.ex * teF * wF * iF * sF * lF * OBJ[0];
+  const turn = .42 * Math.exp(-.55 * p.lam) * (.9 + .12 * (p.wmax - 1) / 4) * u.to;
+  const annTurn = turn * 52;
+  const impBps = 9.5 * Math.sqrt(p.wmax / 2) * u.imp;
+  const cc = { comm: annTurn * 2.5 / 100, stamp: annTurn * 2.5 / 100, xfer: annTurn * .1 / 100, imp: annTurn * impBps / 100, lim: annTurn * 3.4 / 100 };
+  const cost = cc.comm + cc.stamp + cc.xfer + cc.imp + cc.lim;
+  const net = gross - cost;
+  const teExp = (p.te * .93 - .12 * (.8 - p.size)) * OBJ[1];
+  const enc = Math.round((38 + 150 / (p.wmax + .35)) * (uk === 'CSI300' ? .82 : 1));
+  const shrink = .42 + .07 * (p.te - 3);
+  const post = {}; const pre = {};
+  BARRA.forEach(([k]) => { pre[k] = PRE[k] * (k === 'size' || k === 'nls' ? u.sz : 1); post[k] = pre[k] * shrink; });
+  post.size = Math.sign(pre.size) * Math.min(Math.abs(pre.size) * .84, p.size * .97);
+  post.nls = Math.sign(pre.nls) * Math.min(Math.abs(pre.nls) * shrink, p.size * .62);
+  const dev = DEV0.map(v => clamp(v * Math.pow(p.ind / 3, .85), -p.ind, p.ind));
+  return { gross, net, cost, cc, costBps: cost * 100, turn, annTurn, impBps, teExp, enc, ir: net / teExp, pre, post, dev, breach: BARRA.filter(([k]) => Math.abs(post[k]) > .5).map(([k, n]) => n) };
+}
+
+/* =====================================================================
+ * 图表引擎（原生 SVG + 十字光标联动）
+ * ===================================================================== */
+let tipEl;
+function tip(html, e) { tipEl.innerHTML = html; tipEl.style.display = 'block'; const w = tipEl.offsetWidth, h = tipEl.offsetHeight; let x = e.clientX + 14, y = e.clientY + 14; if (x + w > innerWidth - 8) x = e.clientX - w - 14; if (y + h > innerHeight - 8) y = e.clientY - h - 14; tipEl.style.left = x + 'px'; tipEl.style.top = y + 'px'; }
+function untip() { if (tipEl) tipEl.style.display = 'none'; }
+function nice(lo, hi, n = 4) {
+  if (!(hi - lo > 1e-12)) { hi = lo + 1; }
+  const raw = (hi - lo) / n, mag = Math.pow(10, Math.floor(Math.log10(raw))), r = raw / mag;
+  const step = (r > 5 ? 10 : r > 2 ? 5 : r > 1 ? 2 : 1) * mag;
+  const a = Math.floor(lo / step + 1e-9) * step, b = Math.ceil(hi / step - 1e-9) * step;
+  const t = []; for (let v = a; v <= b + step * 1e-6; v += step) t.push(+v.toFixed(12));
+  return { lo: a, hi: b, ticks: t, step };
+}
+function dateTicks(xs, max = 6) {
+  const c = []; let pm = '';
+  xs.forEach((d, i) => { const m = d.slice(0, 7); if (m !== pm) { if (i > 0) c.push(i); pm = m; } });
+  if (c.length < 3) { const k = Math.max(1, Math.floor(xs.length / max)); const o = []; for (let i = 0; i < xs.length; i += k) o.push([i, xs[i].slice(5)]); return o; }
+  for (const st of [1, 2, 3, 6, 12]) { const f = c.filter(i => (+xs[i].slice(5, 7) - 1) % st === 0); if (f.length <= max) return f.map(i => [i, st >= 12 ? xs[i].slice(0, 4) : xs[i].slice(2, 7).replace('-', '/')]); }
+  return [];
+}
+let SYNC = {};
+function svgWrap(W, H, g) { return `<svg width="${W}" height="${H}" viewBox="0 0 ${W} ${H}">${g}</svg>`; }
+function bandsSvg(bands, xs, X, top, h) {
+  let g = '';
+  (bands || []).forEach(b => { const a = X(idxOf(xs, b.a)), c = X(idxOf(xs, b.b)); g += `<rect x="${a.toFixed(1)}" y="${top}" width="${Math.max(2, c - a).toFixed(1)}" height="${h}" class="band"/><text x="${(a + 3).toFixed(1)}" y="${top + 9}" class="bandt">${b.label}</text>`; });
+  return g;
+}
+
+function plotLines(el, o) {
+  if (!el) return; const W = el.clientWidth, H = el.clientHeight; if (!W) return;
+  const hasR = o.series.some(s => s.axis === 'r');
+  const P = Object.assign({ l: 42, r: hasR ? 42 : 10, t: 8, b: 20 }, o.pad || {});
+  const n = o.xs.length, iw = W - P.l - P.r, ih = H - P.t - P.b;
+  const X = i => P.l + i * iw / Math.max(1, n - 1);
+  const dom = (ss, lo, hi) => { let a = Infinity, b = -Infinity; ss.forEach(s => s.data.forEach(v => { if (v < a) a = v; if (v > b) b = v; })); if (lo != null) a = Math.min(a, lo); if (hi != null) b = Math.max(b, hi); const pd = (b - a) * .04; return nice(a - pd, b + pd, o.ticks || 4); };
+  const Ls = o.series.filter(s => s.axis !== 'r'), Rs = o.series.filter(s => s.axis === 'r');
+  const dl = dom(Ls, o.yLo, o.yHi), dr = Rs.length ? dom(Rs, o.rLo, o.rHi) : null;
+  const YL = v => P.t + ih - (v - dl.lo) / (dl.hi - dl.lo) * ih;
+  const YR = dr ? v => P.t + ih - (v - dr.lo) / (dr.hi - dr.lo) * ih : YL;
+  let g = bandsSvg(o.bands, o.xs, X, P.t, ih);
+  dl.ticks.forEach(t => { const y = YL(t).toFixed(1); g += `<line x1="${P.l}" x2="${W - P.r}" y1="${y}" y2="${y}" class="${o.base != null && Math.abs(t - o.base) < 1e-9 ? 'base' : 'grid'}"/><text x="${P.l - 6}" y="${(+y + 3).toFixed(1)}" class="ax" text-anchor="end">${(o.yFmt || String)(t)}</text>`; });
+  if (dr) dr.ticks.forEach(t => { g += `<text x="${W - P.r + 6}" y="${(YR(t) + 3).toFixed(1)}" class="ax">${(o.rFmt || String)(t)}</text>`; });
+  dateTicks(o.xs, o.xMax || 6).forEach(([i, l]) => { const x = X(i).toFixed(1); g += `<line x1="${x}" x2="${x}" y1="${P.t + ih}" y2="${P.t + ih + 3}" class="tick"/><text x="${x}" y="${H - 5}" class="ax" text-anchor="middle">${l}</text>`; });
+  o.series.forEach(s => {
+    const Y = s.axis === 'r' ? YR : YL; let d = '';
+    s.data.forEach((v, i) => { d += (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(v).toFixed(1); });
+    if (s.area) { const y0 = Y(s.areaBase != null ? s.areaBase : 0).toFixed(1); g += `<path d="${d}L${X(n - 1).toFixed(1)} ${y0}L${X(0).toFixed(1)} ${y0}Z" style="fill:${s.color};opacity:${s.areaOp || .14}"/>`; }
+    g += `<path d="${d}" fill="none" style="stroke:${s.color};stroke-width:${s.w || 1.4};${s.dash ? 'stroke-dasharray:' + s.dash + ';' : ''}opacity:${s.op || 1}" stroke-linejoin="round"/>`;
+  });
+  (o.hlines || []).forEach(h => { const y = YL(h.v).toFixed(1); g += `<line x1="${P.l}" x2="${W - P.r}" y1="${y}" y2="${y}" style="stroke:${h.color};stroke-dasharray:4 3"/><text x="${W - P.r - 4}" y="${(+y - 4).toFixed(1)}" text-anchor="end" style="fill:${h.color};font-size:9.5px">${h.label || ''}</text>`; });
+  g += `<line class="vx" x1="0" x2="0" y1="${P.t}" y2="${P.t + ih}" style="display:none"/>`;
+  o.series.forEach((s, si) => { if (!s.noHover) g += `<circle class="dot" r="2.6" style="fill:${s.color};display:none" data-s="${si}"/>`; });
+  g += `<rect class="ov" x="${P.l}" y="${P.t}" width="${iw}" height="${ih}" fill="transparent"/>`;
+  el.innerHTML = svgWrap(W, H, g);
+  const svg = el.firstChild, vx = svg.querySelector('.vx'), dots = [...svg.querySelectorAll('.dot')];
+  const entry = {
+    upd(i) {
+      if (i == null) { vx.style.display = 'none'; dots.forEach(d => d.style.display = 'none'); return; }
+      const x = X(i); vx.setAttribute('x1', x); vx.setAttribute('x2', x); vx.style.display = '';
+      dots.forEach(dt => { const s = o.series[+dt.dataset.s]; const Y = s.axis === 'r' ? YR : YL; dt.setAttribute('cx', x); dt.setAttribute('cy', Y(s.data[i])); dt.style.display = ''; });
+    }
+  };
+  if (o.sync) (SYNC[o.sync] = SYNC[o.sync] || []).push(entry);
+  const group = () => o.sync ? SYNC[o.sync] : [entry];
+  const ov = svg.querySelector('.ov');
+  ov.addEventListener('mousemove', e => {
+    const r = svg.getBoundingClientRect(); const i = clamp(Math.round((e.clientX - r.left - P.l) / iw * (n - 1)), 0, n - 1);
+    group().forEach(en => en.upd(i));
+    tip(o.tipFn ? o.tipFn(i) : defTip(o, i), e);
+  });
+  ov.addEventListener('mouseleave', () => { group().forEach(en => en.upd(null)); untip(); });
+}
+function defTip(o, i) {
+  const rows = o.series.filter(s => !s.noTip).map(s => `<div class="tr"><span><i style="background:${s.color}"></i> ${s.name}</span><b>${(s.fmt || o.yFmt || String)(s.data[i])}</b></div>`);
+  return `<div class="th">${o.xs[i]}</div><div class="${rows.length > 6 ? 'tg2' : ''}">${rows.join('')}</div>`;
+}
+
+function plotBars(el, o) {
+  if (!el) return; const W = el.clientWidth, H = el.clientHeight; if (!W) return;
+  const v = o.values, n = v.length;
+  const P = Object.assign({ l: 42, r: o.line ? 42 : 10, t: 10, b: o.dates ? 20 : 20 }, o.pad || {});
+  const iw = W - P.l - P.r, ih = H - P.t - P.b, bw = iw / n, gp = o.gap != null ? o.gap : Math.min(10, bw * .3);
+  const hv = (o.hlines || []).map(h => h.v);
+  const lo = Math.min(0, ...v, ...hv), hi = Math.max(0, ...v, ...hv), pd = (hi - lo) * .1;
+  const d = nice(lo < 0 ? lo - pd : lo, hi > 0 ? hi + pd : hi, o.ticks || 4);
+  const Y = x => P.t + ih - (x - d.lo) / (d.hi - d.lo) * ih;
+  const Xc = i => P.l + i * bw + bw / 2;
+  let g = o.dates ? bandsSvg(o.bands, o.dates, Xc, P.t, ih) : '';
+  d.ticks.forEach(t => { const y = Y(t).toFixed(1); g += `<line x1="${P.l}" x2="${W - P.r}" y1="${y}" y2="${y}" class="${Math.abs(t) < 1e-12 ? 'base' : 'grid'}"/><text x="${P.l - 6}" y="${(+y + 3).toFixed(1)}" class="ax" text-anchor="end">${(o.yFmt || String)(t)}</text>`; });
+  v.forEach((x, i) => {
+    const bx = P.l + i * bw + gp / 2, w = Math.max(1, bw - gp), y0 = Y(0), y1 = Y(x), y = Math.min(y0, y1), h = Math.max(.6, Math.abs(y1 - y0));
+    const c = o.color ? o.color(x, i) : (x >= 0 ? 'var(--up)' : 'var(--dn)');
+    g += `<rect x="${bx.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" style="fill:${c};opacity:${o.op || .88}" data-tip="${esc(o.tip ? o.tip(x, i) : fx(x, 4))}"/>`;
+    if (o.showVal) g += `<text x="${(bx + w / 2).toFixed(1)}" y="${(x >= 0 ? y - 4 : y + h + 10).toFixed(1)}" class="axl" text-anchor="middle">${o.showVal(x, i)}</text>`;
+  });
+  if (o.dates) dateTicks(o.dates, o.xMax || 6).forEach(([i, l]) => { g += `<text x="${Xc(i).toFixed(1)}" y="${H - 5}" class="ax" text-anchor="middle">${l}</text>`; });
+  else (o.labels || []).forEach((l, i) => { g += `<text x="${Xc(i).toFixed(1)}" y="${H - 6}" class="${o.labelCls ? o.labelCls(i) : 'axl'}" text-anchor="middle" style="font-family:var(--f-sans)">${l}</text>`; });
+  (o.hlines || []).forEach(h => { const y = Y(h.v).toFixed(1); g += `<line x1="${P.l}" x2="${W - P.r}" y1="${y}" y2="${y}" style="stroke:${h.color};stroke-dasharray:4 3"/>${h.label ? `<text x="${W - P.r - 3}" y="${(+y - 3).toFixed(1)}" text-anchor="end" style="fill:${h.color};font-size:9.5px">${h.label}</text>` : ''}`; });
+  if (o.line) {
+    const dr = nice(Math.min(0, ...o.line.data), Math.max(...o.line.data) * 1.05, o.ticks || 4);
+    const YR = x => P.t + ih - (x - dr.lo) / (dr.hi - dr.lo) * ih;
+    let p = ''; o.line.data.forEach((x, i) => { p += (i ? 'L' : 'M') + Xc(i).toFixed(1) + ' ' + YR(x).toFixed(1); });
+    g += `<path d="${p}" fill="none" style="stroke:${o.line.color};stroke-width:1.6"/>`;
+    dr.ticks.forEach(t => { g += `<text x="${W - P.r + 6}" y="${(YR(t) + 3).toFixed(1)}" class="ax" style="fill:${o.line.color}">${(o.rFmt || String)(t)}</text>`; });
+  }
+  el.innerHTML = svgWrap(W, H, g);
+}
+
+function heatmap(el, names, short, M) {
+  if (!el) return; const W = el.clientWidth, H = el.clientHeight; if (!W) return;
+  const P = { l: 146, t: 18, r: 6, b: 4 }, n = names.length, cw = (W - P.l - P.r) / n, ch = (H - P.t - P.b) / n;
+  let g = '';
+  short.forEach((s, j) => { g += `<text x="${(P.l + cw * j + cw / 2).toFixed(1)}" y="12" class="ax" text-anchor="middle" style="${j === 0 ? 'fill:var(--sig);font-weight:600' : ''}">${s}</text>`; });
+  names.forEach((nm, i) => {
+    g += `<text x="${P.l - 8}" y="${(P.t + ch * i + ch / 2 + 3.5).toFixed(1)}" class="axl" text-anchor="end" style="font-size:9.5px;${i === 0 ? 'fill:var(--sig);font-weight:600' : ''}">${nm}</text>`;
+    M[i].forEach((r, j) => {
+      const x = P.l + cw * j, y = P.t + ch * i, a = Math.abs(r), diag = i === j, risk = !diag && a >= .7;
+      const fill = diag ? 'var(--bg3)' : r >= 0 ? `rgba(56,189,248,${(.06 + .78 * a).toFixed(2)})` : `rgba(245,158,11,${(.06 + .78 * a).toFixed(2)})`;
+      g += `<rect x="${(x + 1).toFixed(1)}" y="${(y + 1).toFixed(1)}" width="${(cw - 2).toFixed(1)}" height="${(ch - 2).toFixed(1)}" style="fill:${fill};${risk ? 'stroke:var(--up);stroke-width:1.6' : ''}" data-tip="${esc(names[i] + ' × ' + names[j] + '  r = ' + fx(r, 2) + (risk ? '  |r|>0.70 冗余风险' : ''))}"/>`;
+      g += `<text x="${(x + cw / 2).toFixed(1)}" y="${(y + ch / 2 + 3.5).toFixed(1)}" text-anchor="middle" style="font-size:10.5px;fill:${a > .55 && !diag ? '#0A0D12' : 'var(--tx2)'};font-weight:${risk ? 700 : 400};pointer-events:none">${diag ? '1.00' : fx(r, 2)}</text>`;
+      if (risk) g += `<path d="M${(x + cw - 9).toFixed(1)} ${(y + 1).toFixed(1)}h8v8Z" style="fill:var(--up)"/>`;
+      if (i === 0 && j === 0) g += `<rect x="${P.l}" y="${P.t}" width="${(cw * n).toFixed(1)}" height="${ch.toFixed(1)}" fill="none" style="stroke:var(--sig);stroke-width:1;stroke-dasharray:3 2"/>`;
+    });
+  });
+  el.innerHTML = svgWrap(W, H, g);
+}
+/* =====================================================================
+ * 视图公共件
+ * ===================================================================== */
+const LASTK = {};
+function kpi(id, label, val, sub = '') { const ch = LASTK[id] !== undefined && LASTK[id] !== val; LASTK[id] = val; return `<div class="kpi"><div class="kl">${label}</div><div class="kv ${ch ? 'chg' : ''}">${val}</div><div class="ks">${sub}</div></div>`; }
+function vh(path, prds, title, sub, act = '') { return `<div class="vh"><div style="min-width:0"><div class="crumb"><b>${path}</b>${prds.map(prd).join('')}</div><h1>${title}</h1><p>${sub}</p></div><div class="vh-act">${act}</div></div>`; }
+function panel(title, body, o = {}) { return `<section class="panel ${o.cls || ''}"><div class="ph"><span class="pt">${title}</span>${o.prd ? prd(o.prd) : ''}${o.sub ? `<span class="ps">${o.sub}</span>` : ''}<span class="tools">${o.tools || ''}</span></div><div class="pb ${o.flush ? 'flush' : ''}">${body}</div></section>`; }
+const median = a => { const s = a.slice().sort((x, y) => x - y), k = s.length >> 1; return s.length % 2 ? s[k] : (s[k - 1] + s[k]) / 2; };
+const fmtMs = ms => ms < 1000 ? ms + 'ms' : ms < 60000 ? (ms / 1000).toFixed(1) + 's' : (ms / 60000).toFixed(1) + 'm';
+const addDays = (iso, n) => { const d = new Date(iso + 'T00:00:00Z'); d.setUTCDate(d.getUTCDate() + n); return d.toISOString().slice(0, 10); };
+const addYears = (iso, n) => (+iso.slice(0, 4) + n) + iso.slice(4);
+function hl(l) {
+  const ci = l.indexOf('#'); const code = ci >= 0 ? l.slice(0, ci) : l, cm = ci >= 0 ? l.slice(ci) : '';
+  const h = esc(code).replace(/(&quot;[^&]*?&quot;)|(\$\w+)|\b(def|return|lambda|for|in|if|else)\b|\b(\d+(?:\.\d+)?)\b|([A-Za-z_]\w*)(?=\()/g,
+    (s, str, v, kw, num, fn) => str ? `<span class="tk-s">${str}</span>` : v ? `<span class="tk-v">${v}</span>` : kw ? `<span class="tk-k">${kw}</span>` : num ? `<span class="tk-n">${num}</span>` : `<span class="tk-f">${fn}</span>`);
+  return h + (cm ? `<span class="tk-c">${esc(cm)}</span>` : '');
+}
+const V = {}, DRAW = {};
+
+/* =====================================================================
+ * 视图 1 · Alpha 因子工坊（Q2）
+ * ===================================================================== */
+V.alpha = () => {
+  const f = FAC[S.factor], m = evalFactor(), b = evalFactor(S.factor, ALLON), d = alphaData();
+  const tabs = Object.keys(FAC).map(k => `<button class="ftab ${k === S.factor ? 'on' : ''}" data-act="factor" data-v="${k}"><span class="mono">${k}</span><em>${FAC[k].name} · ${FAC[k].lang}</em></button>`).join('');
+  const code = f.code.split('\n').map((l, i) => `<div class="ln"><i>${i + 1}</i><span>${hl(l)}</span></div>`).join('');
+  const chips = PIPE.map(p => `<button class="chip ${S.pipe[p.k] ? 'on' : ''}" data-act="pipe" data-v="${p.k}"><span class="cb"></span>${p.label}</button>`).join('');
+  const exr = [['Size', m.ex.size], ['Momentum', m.ex.mom], ['ResVol', m.ex.vol], ['Liquidity', m.ex.liq], ['行业集中', m.ex.ind]];
+  const L = .3 / .8 * 50;
+  const meter = exr.map(([k, v]) => { const w = Math.min(50, Math.abs(v) / .8 * 50), bad = Math.abs(v) > .3; return `<div class="mtr"><span>${k}</span><div class="mtb"><i class="lim" style="left:${50 - L}%"></i><i class="lim" style="left:${50 + L}%"></i><i class="mz"></i><b style="left:${v < 0 ? 50 - w : 50}%;width:${w}%;background:${bad ? 'var(--warn)' : 'var(--sig)'}"></b></div><em class="${bad ? 'c-warn' : ''}">${sg(v)}σ</em></div>`; }).join('');
+  const dd = (a, bb, dg, u = '') => { const x = a - bb; return Math.abs(x) < .5 * Math.pow(10, -dg) ? '<span>= 全管线</span>' : `<span class="${x > 0 ? 'c-up' : 'c-dn'}">Δ${sg(x, dg)}${u}</span>`; };
+  const G = { ic: m.ic >= .03, icir: m.icir >= 1.5, t: m.t >= 3, to: m.to <= 20, mc: m.mc < .7, mono: d.mono >= .9 };
+  const gt = ok => ok ? tag('pass', 'PASS') : tag('warn', 'WARN');
+  const K = kpi('a-ic', 'RankIC 均值', fx(m.ic, 4), gt(G.ic) + dd(m.ic, b.ic, 4))
+    + kpi('a-icir', 'ICIR 年化', fx(m.icir, 2), gt(G.icir) + dd(m.icir, b.icir, 2))
+    + kpi('a-t', 'NW t-stat', fx(m.t, 2), gt(G.t) + dd(m.t, b.t, 2))
+    + kpi('a-ls', '多空年化收益', sg(m.ls, 1) + '%', '<span>Q10−Q1</span>' + dd(m.ls, b.ls, 1))
+    + kpi('a-top', 'Top 组超额年化', sg(m.top, 1) + '%', '<span>vs 等权</span>' + dd(m.top, b.top, 1))
+    + kpi('a-to', '单边日换手率', fx(m.to, 1) + '%', gt(G.to) + dd(m.to, b.to, 1))
+    + kpi('a-hl', 'IC 半衰期', fx(m.hl, 1) + 'D', '<span>指数衰减拟合</span>')
+    + kpi('a-mc', '库内 MaxCorr', fx(m.mc, 2), (G.mc ? tag('pass', 'PASS') : tag('warn', 'WARN')) + `<span>${m.mcWith}</span>`);
+  const W = [];
+  if (!S.pipe.size) W.push(['warn', 'SIZE 未中性化', `Size 暴露 ${sg(m.ex.size)}σ · RankIC ${sg(m.ic - b.ic, 4)} 来自小盘溢价，属风格 Beta 而非 Alpha`]);
+  if (!S.pipe.st) W.push(['warn', 'ST/涨跌停未剔除', `含不可成交样本 · 多空收益虚高 ${sg(m.ls - b.ls, 1)}% · 回测不可落地`]);
+  if (!S.pipe.ind) W.push(['warn', '行业未中性', `ICIR ${sg(m.icir - b.icir)} · 收益集中于行业轮动`]);
+  if (!S.pipe.barra) W.push(['warn', '未做风格正交', `MaxCorr ${fx(b.mc)} → ${fx(m.mc)} · 与库内因子冗余上升`]);
+  if (!S.pipe.mad) W.push(['warn', '极值未截断', `分层离散度上升 · ICIR ${sg(m.icir - b.icir)}`]);
+  if (m.mc >= .7) W.push(['fail', '库内冗余', `与 ${m.mcWith} 相关 ${fx(m.mc)} ≥ 0.70 · 入库前需正交或替换`]);
+  const np = Object.values(G).filter(Boolean).length;
+  const strip = `<div class="gs ${np === 6 ? 'pass' : np >= 5 ? 'warn' : 'fail'}"><b>入库门禁 ${np}/6</b><span>RankIC≥0.03 · ICIR≥1.5 · t≥3 · 换手≤20% · MaxCorr&lt;0.70 · 单调ρ≥0.90</span></div>`
+    + (W.length ? W.map(([c, t, x]) => `<div class="gs ${c}"><b>${t}</b><span>${x}</span></div>`).join('') : '<div class="gs pass"><b>预处理 5/5</b><span>无风格泄漏 · 可提交 Q3 合成</span></div>');
+  const legend = `<span><i style="background:linear-gradient(90deg,${DCOL[0]},${DCOL[4]},${DCOL[9]});width:46px;height:3px"></i>Q1 → Q10</span><span><i style="background:var(--sig);height:2px"></i>多空 L/S</span><span><i style="border-top:1px dashed var(--tx3);height:0"></i>等权基准</span><span style="margin-left:auto">Q10 <b class="c-up">${sg(m.top, 1)}%</b> · Q1 <b class="c-dn">${sg(m.top - m.ls, 1)}%</b> /yr</span>`;
+  return `<div class="stack">
+  ${vh('/alpha', ['Q2'], 'Alpha 因子工坊', `因子定义 → 截面预处理 → Tearsheet 诊断 → 入库门禁 · ${UNI[S.uni].label} · 2019-01-02 → 2026-11-25 · 1D 调仓 · T+1 VWAP 成交`,
+    `<span class="tag mute">EXP-0431 · DRAFT</span><button class="btn" data-act="cmd" data-v="ic">${ic('play', 10)}重跑评估</button><button class="btn pri" data-act="submitFactor">提交入库门禁</button>`)}
+  <section class="panel">
+    <div class="ftabs">${tabs}</div>
+    <div class="defg">
+      <div style="min-width:0"><div class="ed">${code}</div><div class="edm"><span>${f.lang}</span><span>PIT asof=ann_date</span><span>Lazy · ${thou(UNI[S.uni].n)} 股 × 1,912 日</span><span style="margin-left:auto;display:flex;gap:6px;align-items:center">${prd('Q2.1')}<span class="c-pass">编译 OK · 0.84s</span></span></div></div>
+      <div class="pipe"><div class="ttl">截面预处理管线 ${prd('Q2.2')}<span class="mono" style="margin-left:auto;font-weight:400">${PIPE.filter(p => S.pipe[p.k]).length}/5 ON</span></div><div class="chips">${chips}</div>
+      <div class="ttl" style="margin-top:2px">残余风格暴露 (σ)<span style="margin-left:auto;font-weight:400;letter-spacing:0">阈值 ±0.30σ</span></div>${meter}</div>
+    </div>
+  </section>
+  <div class="kpis k8">${K}</div>
+  <div class="gstrip">${strip}</div>
+  <div class="g2">
+    ${panel('10 分层单调性净值 · Q1–Q10 + 多空', `<div class="cv" id="c-dec" style="height:204px"></div><div class="lg" style="margin-top:6px">${legend}</div>`, { prd: 'Q2.3', tools: tag('info', '单调性 ρ=' + fx(d.mono)) + tag('mute', 'L/S ' + sg(m.ls, 1) + '%/yr') })}
+    ${panel('滚动 60D RankIC · 累计 IC', '<div class="cv" id="c-ric" style="height:226px"></div>', { prd: 'Q2.3', tools: `<span class="lg"><span><i class="bx" style="background:var(--up)"></i>IC&gt;0</span><span><i class="bx" style="background:var(--dn)"></i>IC&lt;0</span><span><i style="background:var(--sig)"></i>累计</span></span>` + tag('mute', 'IC&gt;0 ' + fx(d.posRatio * 100, 0) + '%') })}
+    ${panel(S.alphaAlt === 'lag' ? 'IC 滞后衰减 · Lag 1D–60D' : '分行业 RankIC · 申万一级', '<div class="cv" id="c-lag" style="height:226px"></div>', { prd: 'Q2.3', tools: `<div class="seg"><button class="${S.alphaAlt === 'lag' ? 'on' : ''}" data-act="alt" data-v="lag">IC 衰减</button><button class="${S.alphaAlt === 'ind' ? 'on' : ''}" data-act="alt" data-v="ind">行业 IC</button></div>` })}
+    ${panel('因子库相关性矩阵 · 6×6', '<div class="cv" id="c-corr" style="height:226px"></div>', { prd: 'Q2.3', tools: `<span class="lg"><span><i class="bx" style="border:1.5px solid var(--up)"></i>|r|&gt;0.70</span></span>` + tag(m.mc >= .7 ? 'fail' : 'pass', 'MaxCorr ' + fx(m.mc)) })}
+  </div></div>`;
+};
+DRAW.alpha = () => {
+  const d = alphaData(), m = evalFactor();
+  plotLines($('#c-dec'), {
+    xs: d.wx, base: 1, bands: CYC, ticks: 5, yFmt: v => v.toFixed(2),
+    series: d.dec.map((s, j) => ({ name: 'Q' + (j + 1), data: s, color: DCOL[j], w: j === 0 || j === 9 ? 1.6 : 1, op: j === 0 || j === 9 ? 1 : .78, noHover: j > 0 && j < 9 }))
+      .concat([{ name: '等权基准', data: d.bm, color: 'var(--tx3)', w: 1, dash: '3 3', noHover: true }, { name: '多空 L/S', data: d.ls, color: 'var(--sig)', w: 2 }]),
+    tipFn: i => `<div class="th">${d.wx[i]} · 累计净值</div><div class="tr"><span><i style="background:var(--sig)"></i> 多空 L/S</span><b>${d.ls[i].toFixed(3)}</b></div><div class="tg2">${d.dec.map((s, j) => j).reverse().map(j => `<div class="tr"><span><i style="background:${DCOL[j]}"></i> Q${j + 1}</span><b>${d.dec[j][i].toFixed(3)}</b></div>`).join('')}</div>`
+  });
+  plotBars($('#c-ric'), { values: d.icv, dates: d.icx, bands: CYC, gap: 1, op: .72, line: { data: d.cum, color: 'var(--sig)' }, yFmt: v => v.toFixed(2), rFmt: v => v.toFixed(1), tip: (v, i) => `${d.icx[i]} · 60D RankIC ${sg(v, 4)}<br>累计 IC ${fx(d.cum[i], 2)}` });
+  if (S.alphaAlt === 'lag') plotBars($('#c-lag'), { values: d.lag, labels: d.lagL.map(l => 'Lag ' + l + 'D'), color: () => 'var(--sig)', showVal: v => fx(v, 4), yFmt: v => v.toFixed(2), gap: 26, hlines: [{ v: m.ic / 2, color: 'var(--warn)', label: '50% 半衰线 · HL ' + fx(m.hl, 1) + 'D' }], tip: (v, i) => `Lag ${d.lagL[i]}D · RankIC ${fx(v, 4)}<br>保留 ${fx(v / d.lag[0] * 100, 1)}%` });
+  else plotBars($('#c-lag'), { values: d.ind, labels: d.INDN, yFmt: v => v.toFixed(2), gap: 8, hlines: [{ v: m.ic, color: 'var(--sig)', label: '全市场 ' + fx(m.ic, 3) }], tip: (v, i) => `${d.INDN[i]} · RankIC ${sg(v, 4)}` });
+  heatmap($('#c-corr'), [S.factor].concat(LIB), ['NEW'].concat(LIBS), d.M);
+};
+
+/* =====================================================================
+ * 视图 2 · 多因子合成与过拟合防线（Q3）
+ * ===================================================================== */
+V.models = () => {
+  const e = EXPS.find(x => x.id === S.exp), u = UNI[S.uni], paths = cpcvPaths(e), neg = paths.filter(v => v < 0).length;
+  const rows = EXPS.map(x => `<tr class="click ${x.id === S.exp ? 'sel' : ''}" data-act="exp" data-v="${x.id}"><td class="mono">${x.code}</td><td>${x.name} ${x.id === 'rd42' ? prd('Q7.3') : ''}</td><td class="sub">${x.feat}</td><td class="n">${fx(x.is)}</td><td class="n">${fx(x.oos)}</td><td class="n ${x.oos / x.is < .5 ? 'c-up' : ''}">${fx(x.oos / x.is)}</td><td class="n ${x.pbo > .25 ? 'c-up' : ''}">${fx(x.pbo)}</td><td class="n ${x.dsr < .95 ? 'c-warn' : ''}">${fx(x.dsr)}</td><td class="n">${sg(x.ex * u.ex, 1)}%</td><td>${gateTag(x)}</td></tr>`).join('');
+  const gr = (x, val, max, thr, bad) => `<div class="gate-row ${x.id === S.exp ? 'on' : ''}"><span>${x.name}</span><div class="gb"><b style="width:${clamp(val / max * 100, 0, 100)}%;background:${bad ? 'var(--up)' : 'var(--sig)'};opacity:${x.id === S.exp ? 1 : .55}"></b><i style="left:${thr / max * 100}%"></i></div><em class="${bad ? 'c-up' : ''}">${fx(val)}</em></div>`;
+  const chk = [['CPCV PBO ≤ 0.25', fx(e.pbo), e.pbo <= .25], ['Deflated Sharpe ≥ 0.95', fx(e.dsr), e.dsr >= .95], ['OOS / IS 夏普 ≥ 0.50', fx(e.oos / e.is), e.oos / e.is >= .5], ['OOS 负夏普路径 ≤ 2/15', neg + '/15', neg <= 2]];
+  const verdict = `<div class="verdict"><div class="vrow"><b>${e.code} 门禁判定</b>${gateTag(e)}</div>${chk.map(([a, v, ok]) => `<div class="vrow"><span>${a}</span><span style="display:flex;gap:6px;align-items:center"><b>${v}</b>${ok ? tag('pass', 'PASS') : tag('fail', 'FAIL')}</span></div>`).join('')}${e.id === 'rd42' ? '<div style="margin-top:4px;color:var(--mem);font-size:10.5px;line-height:1.5">失败教训已写入 project.memory · RD-Agent 下一轮假设自动施加算子复杂度惩罚</div>' : ''}</div>`;
+  const irs = wfIR(e);
+  return `<div class="stack">
+  ${vh('/models', ['Q3'], '多因子合成与过拟合防线', 'Experiment Registry · CPCV 组合清除交叉验证 · Deflated Sharpe · Walk-Forward 样本外滚动 · 硬门禁自动拦截',
+    `<span class="tag mute">N=6 组 · k=2 · 15 路径 · purge 5D · embargo 10D</span><button class="btn" data-act="cmd" data-v="cpcv">${ic('play', 10)}CPCV 过拟合体检</button>`)}
+  ${panel('实验注册表 · Experiment Registry', `<table class="tbl"><thead><tr><th>实验 ID</th><th>模型</th><th>特征集</th><th class="n">IS Sharpe</th><th class="n">OOS Sharpe</th><th class="n">OOS/IS</th><th class="n">CPCV PBO</th><th class="n">DSR</th><th class="n">OOS 年化超额</th><th>门禁判定</th></tr></thead><tbody>${rows}</tbody></table>`, { prd: 'Q3.1', flush: true, tools: `<span class="ps">点击行切换诊断 · ${u.label}</span>` })}
+  <div class="mg">
+    ${panel('CPCV 15 路径 OOS 夏普分布 · ' + e.code, '<div class="cv" id="c-cpcv" style="height:318px"></div>', { prd: 'Q3.2', tools: `<span class="lg"><span><i class="bx" style="background:${e.gate === 'REJECTED' ? 'var(--up)' : e.gate === 'HOLD' ? 'var(--warn)' : 'var(--sig)'}"></i>${e.code}</span>${e.id !== 'lgbm' ? '<span><i class="bx" style="border:1px dashed var(--tx2)"></i>EXP-0427 对照</span>' : ''}</span>` + tag(e.pbo > .25 ? 'fail' : 'pass', 'PBO ' + fx(e.pbo)) })}
+    ${panel('过拟合硬门禁 · PBO / DSR', `<div class="gsec" style="margin-top:0"><span>CPCV PBO 过拟合概率</span><span class="c-up">阈值 0.25</span></div>${EXPS.map(x => gr(x, x.pbo, .6, .25, x.pbo > .25)).join('')}<div class="gsec"><span>DEFLATED SHARPE RATIO</span><span class="c-up">阈值 0.95</span></div>${EXPS.map(x => gr(x, x.dsr, 1, .95, x.dsr < .95)).join('')}${verdict}`, { prd: 'Q3.2' })}
+  </div>
+  ${panel('Walk-Forward 样本外滚动 · 训练 3Y / Embargo 10D / 测试 6M', '<div class="cv" id="c-wf" style="height:212px"></div>', { prd: 'Q3.2', tools: `<span class="lg"><span><i class="bx" style="background:var(--line2)"></i>训练 3Y</span><span><i class="bx" style="background:var(--warn)"></i>Embargo</span><span><i class="bx" style="background:var(--sig)"></i>OOS 6M</span></span>` + tag(mean(irs) >= 1 ? 'info' : 'fail', 'OOS IR 均值 ' + fx(mean(irs))) })}
+  </div>`;
+};
+function drawCPCV(el, e) {
+  if (!el) return; const W = el.clientWidth, H = el.clientHeight; if (!W) return;
+  const paths = cpcvPaths(e), ref = cpcvPaths(EXPS[2]), lo = -2, hi = 4.5, bv = .5, nb = Math.round((hi - lo) / bv);
+  const cnt = a => { const c = new Array(nb).fill(0); a.forEach(v => c[clamp(Math.floor((v - lo) / bv), 0, nb - 1)]++); return c; };
+  const cs = cnt(paths), cr = cnt(ref);
+  const P = { l: 34, r: 12, t: 24, b: 66 }, iw = W - P.l - P.r, ih = H - P.t - P.b;
+  const X = v => P.l + (v - lo) / (hi - lo) * iw, ymax = Math.max(6, ...cs, ...cr), Y = c => P.t + ih - c / ymax * ih;
+  const col = e.gate === 'REJECTED' ? 'var(--up)' : e.gate === 'HOLD' ? 'var(--warn)' : 'var(--sig)';
+  let g = `<rect x="${X(lo)}" y="${P.t}" width="${(X(0) - X(lo)).toFixed(1)}" height="${ih}" style="fill:var(--up);opacity:.07"/><text x="${X(lo) + 5}" y="${P.t + 12}" style="fill:var(--up);font-size:9.5px">OOS SR&lt;0 · 过拟合区</text>`;
+  for (let c = 0; c <= ymax; c += 2) { const y = Y(c).toFixed(1); g += `<line x1="${P.l}" x2="${W - P.r}" y1="${y}" y2="${y}" class="${c ? 'grid' : 'base'}"/><text x="${P.l - 6}" y="${+y + 3}" class="ax" text-anchor="end">${c}</text>`; }
+  const bw = iw / nb;
+  for (let k = 0; k < nb; k++) {
+    const x = P.l + k * bw + 2, w = bw - 4, a = lo + k * bv;
+    if (e.id !== 'lgbm' && cr[k]) g += `<rect x="${x.toFixed(1)}" y="${Y(cr[k]).toFixed(1)}" width="${w.toFixed(1)}" height="${(Y(0) - Y(cr[k])).toFixed(1)}" style="fill:none;stroke:var(--tx2);stroke-dasharray:3 2;opacity:.7"/>`;
+    if (cs[k]) g += `<rect x="${(x + 3).toFixed(1)}" y="${Y(cs[k]).toFixed(1)}" width="${(w - 6).toFixed(1)}" height="${(Y(0) - Y(cs[k])).toFixed(1)}" style="fill:${col};opacity:.82" data-tip="${esc(`SR ∈ [${fx(a, 1)}, ${fx(a + bv, 1)}) · ${cs[k]} 条路径${e.id !== 'lgbm' ? ' · 对照 ' + cr[k] : ''}`)}"/>`;
+  }
+  for (let v = -2; v <= 4; v++) g += `<text x="${X(v).toFixed(1)}" y="${P.t + ih + 13}" class="ax" text-anchor="middle">${v}</text>`;
+  const med = median(paths);
+  g += `<line x1="${X(0)}" x2="${X(0)}" y1="${P.t}" y2="${P.t + ih}" style="stroke:var(--up);stroke-width:1.5"/>`;
+  g += `<line x1="${X(e.is).toFixed(1)}" x2="${X(e.is).toFixed(1)}" y1="${P.t - 6}" y2="${P.t + ih}" style="stroke:var(--warn);stroke-dasharray:4 3;stroke-width:1.3"/><text x="${(X(e.is) + 3).toFixed(1)}" y="${P.t - 9}" style="fill:var(--warn);font-size:9.5px">IS ${fx(e.is)}</text>`;
+  g += `<line x1="${X(med).toFixed(1)}" x2="${X(med).toFixed(1)}" y1="${P.t - 6}" y2="${P.t + ih}" style="stroke:var(--sig);stroke-width:1.5"/><text x="${(X(med) - 3).toFixed(1)}" y="${P.t - 9}" text-anchor="end" style="fill:var(--sig);font-size:9.5px">OOS 中位 ${fx(med)}</text>`;
+  const sy = H - 30;
+  g += `<text x="${P.l}" y="${H - 4}" class="ax">PATHS · 15 条 CPCV 路径 · 测试组合 C(6,2)</text><line x1="${P.l}" x2="${W - P.r}" y1="${sy}" y2="${sy}" class="grid"/>`;
+  paths.forEach((v, k) => { const x = X(clamp(v, lo, hi)).toFixed(1); g += `<rect x="${(+x - 3.5).toFixed(1)}" y="${sy - 4 + (k % 3 - 1) * 7}" width="7" height="7" style="fill:${v < 0 ? 'var(--up)' : col};opacity:.9" data-tip="${esc(`Path ${String(k + 1).padStart(2, '0')} · 测试 ${CPCV_PAIRS[k]} · OOS SR ${fx(v)}`)}"/>`; });
+  g += `<text x="${W - P.r}" y="${H - 4}" class="ax" text-anchor="end">OOS Sharpe (年化) · 负路径 ${paths.filter(v => v < 0).length}/15</text>`;
+  el.innerHTML = svgWrap(W, H, g);
+}
+function drawWF(el, e) {
+  if (!el) return; const W = el.clientWidth, H = el.clientHeight; if (!W) return;
+  const irs = wfIR(e), P = { l: 30, r: 10, t: 18, b: 6 }, colW = 170, tw = W - P.l - P.r - colW - 18;
+  const t0 = Date.parse('2019-01-01'), t1 = Date.parse('2027-01-01'), X = d => P.l + (Date.parse(d) - t0) / (t1 - t0) * tw;
+  const n = WF.length, rh = (H - P.t - P.b) / n;
+  let g = '';
+  for (let y = 2019; y <= 2027; y++) { const x = X(y + '-01-01').toFixed(1); g += `<line x1="${x}" x2="${x}" y1="${P.t - 4}" y2="${H - P.b}" class="grid"/><text x="${x}" y="${P.t - 7}" class="ax" text-anchor="middle">${y}</text>`; }
+  const nx = X('2026-11-25').toFixed(1); g += `<line x1="${nx}" x2="${nx}" y1="${P.t - 4}" y2="${H - P.b}" style="stroke:var(--tx2);stroke-dasharray:2 2"/>`;
+  const x0 = W - P.r - colW, XI = v => x0 + 26 + (v + 1) / 4 * (colW - 60);
+  g += `<text x="${x0 + 26}" y="${P.t - 7}" class="ax">OOS IR</text><line x1="${XI(0).toFixed(1)}" x2="${XI(0).toFixed(1)}" y1="${P.t - 2}" y2="${H - P.b}" class="base"/><line x1="${XI(1).toFixed(1)}" x2="${XI(1).toFixed(1)}" y1="${P.t - 2}" y2="${H - P.b}" style="stroke:var(--tx3);stroke-dasharray:2 3"/><text x="${XI(1) + 3}" y="${P.t - 7}" class="ax">1.0</text>`;
+  WF.forEach(([ts, te], k) => {
+    const y = P.t + k * rh + rh * .22, h = rh * .56, trE = addDays(ts, -10), trS = addYears(trE, -3);
+    g += `<text x="4" y="${(y + h / 2 + 3.5).toFixed(1)}" class="ax">F${k + 1}</text>`;
+    g += `<rect x="${X(trS).toFixed(1)}" y="${y.toFixed(1)}" width="${(X(trE) - X(trS)).toFixed(1)}" height="${h.toFixed(1)}" style="fill:var(--line2)" data-tip="${esc(`F${k + 1} 训练 ${trS} → ${trE} (3Y)`)}"/>`;
+    g += `<rect x="${X(trE).toFixed(1)}" y="${y.toFixed(1)}" width="${Math.max(2, X(ts) - X(trE)).toFixed(1)}" height="${h.toFixed(1)}" style="fill:var(--warn)" data-tip="${esc(`F${k + 1} Embargo ${trE} → ${ts} (10D 清除)`)}"/>`;
+    g += `<rect x="${X(ts).toFixed(1)}" y="${y.toFixed(1)}" width="${(X(te) - X(ts)).toFixed(1)}" height="${h.toFixed(1)}" style="fill:var(--sig)" data-tip="${esc(`F${k + 1} OOS 测试 ${ts} → ${te} · IR ${fx(irs[k])}`)}"/>`;
+    const v = irs[k], xa = XI(Math.min(0, v)), xb = XI(Math.max(0, v));
+    g += `<rect x="${xa.toFixed(1)}" y="${y.toFixed(1)}" width="${Math.max(1, xb - xa).toFixed(1)}" height="${h.toFixed(1)}" style="fill:${v < 0 ? 'var(--dn)' : v < 1 ? 'var(--warn)' : 'var(--sig)'}" data-tip="${esc(`F${k + 1} OOS IR ${fx(v)}`)}"/><text x="${(xb + 4).toFixed(1)}" y="${(y + h / 2 + 3.5).toFixed(1)}" class="axl">${fx(v)}</text>`;
+  });
+  el.innerHTML = svgWrap(W, H, g);
+}
+DRAW.models = () => { const e = EXPS.find(x => x.id === S.exp); drawCPCV($('#c-cpcv'), e); drawWF($('#c-wf'), e); };
+
+/* =====================================================================
+ * 视图 3 · 组合优化与 Barra CNE6 风险终端（Q4）
+ * ===================================================================== */
+const PF0 = { wmax: 2.0, ind: 3.0, lam: 0.6, te: 5.0, size: 0.8 };
+const SL = [['wmax', '单股权重上限', 1, 5, .1, v => fx(v, 1) + '%'], ['ind', '行业最大偏离', 1, 5, .1, v => '±' + fx(v, 1) + '%'], ['lam', '换手率 L1 惩罚系数 λ', 0, 2, .05, v => fx(v, 2)], ['te', '目标跟踪误差 TE', 3, 8, .1, v => fx(v, 1) + '%'], ['size', 'Size 风格敞口限制', .2, .8, .02, v => '±' + fx(v, 2) + 'σ']];
+function setRangeP(inp) { inp.style.setProperty('--p', ((inp.value - inp.min) / (inp.max - inp.min) * 100) + '%'); }
+V.portfolio = () => {
+  const sl = SL.map(([k, l, a, b, st, f]) => `<div class="sl"><div class="slh"><span>${l}</span><b id="sv-${k}">${f(S.pf[k])}</b></div><input type="range" data-pf="${k}" min="${a}" max="${b}" step="${st}" value="${S.pf[k]}" style="--p:${(S.pf[k] - a) / (b - a) * 100}%"><div class="sls mono"><span>${f(a)}</span><span>${f(b)}</span></div></div>`).join('');
+  const objs = [['ir', 'Max IR'], ['mv', '均值方差'], ['rp', '风险平价']];
+  return `<div class="stack">
+  ${vh('/portfolio', ['Q4'], '组合优化与 Barra CNE6 风险终端', `cvxpy 凸优化 · 基准 ${UNI[S.uni].code} · 风险模型 Barra CNE6（日频 · 半衰期 90D · 特质风险 NW 调整）· 周频调仓`,
+    `<span class="solv" id="pf-solv"></span><button class="btn" data-act="pfReset">恢复默认约束</button><button class="btn pri" data-act="cmd" data-v="barra">${ic('shield', 11)}Barra 风险诊断</button>`)}
+  <div class="pfg">
+    ${panel('cvxpy 约束调节器', `<div class="seg" style="width:100%;margin-bottom:2px;display:flex">${objs.map(([k, l]) => `<button style="flex:1;justify-content:center" class="${S.obj === k ? 'on' : ''}" data-act="obj" data-v="${k}">${l}</button>`).join('')}</div>${sl}<div class="code" id="pf-code"></div>`, { prd: 'Q4.2', tools: '<span class="ps">拖动实时重算</span>' })}
+    <div class="stack" style="min-width:0">
+      <div class="kpis k5" id="pf-kpi"></div>
+      <div id="pf-banner"></div>
+      ${panel('Barra CNE6 主动风格暴露 · 龙卷风图 (σ)', '<div class="cv" id="c-tor" style="height:300px"></div>', { prd: 'Q4.1', tools: `<span class="lg"><span><i class="bx" style="border:1px dashed var(--tx2)"></i>优化前</span><span><i class="bx" style="background:var(--sig)"></i>cvxpy 优化后</span><span><i class="bx" style="background:var(--up)"></i>越界</span><span><i style="border-top:1.5px dashed var(--up);height:0"></i>±0.5σ</span></span>` })}
+    </div>
+  </div>
+  ${panel('申万一级行业主动权重偏离 (%)', '<div class="cv" id="c-ind" style="height:166px"></div>', { prd: 'Q4.2', tools: '<span class="ps" id="pf-indnote"></span>' })}
+  ${panel('目标调仓权重 · Top 10 持仓明细', '<div id="pf-hold"></div>', { prd: 'Q4.2', flush: true, tools: '<span class="ps" id="pf-holdnote"></span>' })}
+  </div>`;
+};
+function pfCode(p) {
+  const h = v => `<span class="hl">${v}</span>`;
+  return `w    = cp.Variable(n)   <span class="c-3"># ${thou(UNI[S.uni].n)} 只成分</span>
+obj  = cp.Maximize(α @ w
+         - ${h(fx(p.lam, 2))} * cp.norm1(w - w0))
+cons = [cp.sum(w) == 1, w >= 0,
+  w <= ${h(fx(p.wmax / 100, 3))},
+  cp.abs(H @ (w - wb)) <= ${h(fx(p.ind / 100, 3))},
+  cp.quad_form(w - wb, Σ) <= ${h(fx(p.te / 100, 3))}**2,
+  cp.abs(X_size @ (w-wb)) <= ${h(fx(p.size, 2))}]`;
+}
+function drawTornado(el, o) {
+  if (!el) return; const W = el.clientWidth, H = el.clientHeight; if (!W) return;
+  const P = { l: 104, r: 96, t: 18, b: 18 }, iw = W - P.l - P.r, n = BARRA.length, rh = (H - P.t - P.b) / n;
+  const X = v => P.l + iw / 2 + clamp(v, -1, 1) * iw / 2;
+  let g = '';
+  [-1, -.5, 0, .5, 1].forEach(v => { const x = X(v).toFixed(1); g += `<line x1="${x}" x2="${x}" y1="${P.t}" y2="${H - P.b}" class="${v === 0 ? 'base' : 'grid'}"/><text x="${x}" y="${H - 5}" class="ax" text-anchor="middle">${v > 0 ? '+' : ''}${v.toFixed(1)}σ</text>`; });
+  [-.5, .5].forEach(v => { const x = X(v).toFixed(1); g += `<line x1="${x}" x2="${x}" y1="${P.t - 6}" y2="${H - P.b}" style="stroke:var(--up);stroke-dasharray:4 3;stroke-width:1.2"/>`; });
+  g += `<text x="${X(.5) + 4}" y="${P.t - 7}" style="fill:var(--up);font-size:9.5px">硬边界 +0.5σ</text><text x="${X(-.5) - 4}" y="${P.t - 7}" text-anchor="end" style="fill:var(--up);font-size:9.5px">-0.5σ 硬边界</text>`;
+  BARRA.forEach(([k, name], i) => {
+    const y = P.t + i * rh, pre = o.pre[k], post = o.post[k], bad = Math.abs(post) > .5, cy = y + rh / 2;
+    if (i % 2 === 0) g += `<rect x="0" y="${y.toFixed(1)}" width="${W}" height="${rh.toFixed(1)}" style="fill:var(--bg2);opacity:.45"/>`;
+    g += `<text x="${P.l - 10}" y="${(cy + 3.5).toFixed(1)}" text-anchor="end" style="fill:var(--tx2);font-size:11px;font-family:var(--f-sans)">${name}</text>`;
+    const pa = X(Math.min(0, pre)), pb = X(Math.max(0, pre));
+    g += `<rect x="${pa.toFixed(1)}" y="${(cy - rh * .32).toFixed(1)}" width="${(pb - pa).toFixed(1)}" height="${(rh * .64).toFixed(1)}" style="fill:var(--tx3);fill-opacity:.07;stroke:var(--tx2);stroke-dasharray:3 2;stroke-width:1"/>`;
+    const qa = X(Math.min(0, post)), qb = X(Math.max(0, post));
+    g += `<rect x="${qa.toFixed(1)}" y="${(cy - rh * .17).toFixed(1)}" width="${Math.max(1, qb - qa).toFixed(1)}" height="${(rh * .34).toFixed(1)}" style="fill:${bad ? 'var(--up)' : 'var(--sig)'}" data-tip="${esc(`${name} · 优化前 ${sg(pre)}σ → 优化后 ${sg(post)}σ${bad ? ' · 越过 ±0.5σ 硬边界' : ''}`)}"/>`;
+    if (k === 'size') { [-S.pf.size, S.pf.size].forEach(v => { const x = X(v).toFixed(1); g += `<line x1="${x}" x2="${x}" y1="${(y + 2).toFixed(1)}" y2="${(y + rh - 2).toFixed(1)}" style="stroke:var(--warn);stroke-width:2"/>`; }); g += `<text x="${(X(S.pf.size) + 3).toFixed(1)}" y="${(y + 9).toFixed(1)}" style="fill:var(--warn);font-size:9px">约束 ±${fx(S.pf.size)}σ</text>`; }
+    g += `<text x="${W - P.r + 8}" y="${(cy + 3.5).toFixed(1)}" style="font-size:10.5px;fill:var(--tx3)">${sg(pre)} → <tspan style="fill:${bad ? 'var(--up)' : 'var(--tx)'};font-weight:600">${sg(post)}</tspan></text>`;
+  });
+  el.innerHTML = svgWrap(W, H, g);
+}
+function holdHTML(p, o) {
+  let sum = 0, capped = 0, imps = [];
+  const rows = HOLD.map(([code, name, ind, base, bw, prev, st, liq]) => {
+    const tw = Math.min(p.wmax, base * (.85 + .075 * p.wmax)), act = tw - bw, trade = tw - prev, imp = 2.6 + 7.2 * Math.sqrt(Math.abs(trade) * liq) * UNI[S.uni].imp, cap = tw >= p.wmax - 1e-9;
+    sum += tw; capped += cap ? 1 : 0; imps.push(imp);
+    const stc = st === 'PASS' ? tag('pass', 'T+1 OK · 可成交') : st === 'T1' ? tag('warn', 'T+1 锁定 · 今买不可卖') : st === 'LIMIT' ? tag('warn', '涨停排队 · 延迟买入') : tag('warn', 'POV 10% 截断 · 分 2 日');
+    return `<tr><td class="mono">${code}</td><td>${name}</td><td class="sub">${ind}</td><td class="n">${fx(tw, 2)}%${cap ? ' <span class="tag mute" style="padding:1px 3px">CAP</span>' : ''}</td><td class="n c-2">${fx(bw, 2)}%</td><td class="n ${act >= 0 ? 'c-up' : 'c-dn'}">${sg(act, 2)}%</td><td class="n ${trade >= 0 ? 'c-up' : 'c-dn'}">${trade >= 0 ? '买 ' : '卖 '}${fx(Math.abs(trade), 2)}%</td><td class="n">${fx(imp, 1)}</td><td>${stc}</td></tr>`;
+  }).join('');
+  return { html: `<table class="tbl dense"><thead><tr><th>代码</th><th>名称</th><th>行业</th><th class="n">目标权重</th><th class="n">基准权重</th><th class="n">主动偏离</th><th class="n">本次交易</th><th class="n">冲击 bps</th><th>流动性 / T+1 校验</th></tr></thead><tbody>${rows}</tbody></table>`, note: `Top10 合计 ${fx(sum, 2)}% · 触顶 ${capped}/10 · 平均冲击 ${fx(mean(imps), 1)} bps` };
+}
+function updPf() {
+  if (S.view !== 'portfolio' || !$('#pf-kpi')) return;
+  const p = S.pf, o = optimize();
+  SL.forEach(([k, , , , , f]) => { const el = $('#sv-' + k); if (el) el.textContent = f(p[k]); });
+  $('#pf-kpi').innerHTML = kpi('p-ex', '预计年化超额', sg(o.net, 2) + '%', `<span>毛 ${fx(o.gross, 1)} − 费 ${fx(o.cost, 1)}%</span>`)
+    + kpi('p-te', '预期跟踪误差', fx(o.teExp, 2) + '%', `<span>目标 ≤ ${fx(p.te, 1)}%</span>`)
+    + kpi('p-ir', '预期信息比率', fx(o.ir, 2), '<span>net / TE</span>')
+    + kpi('p-to', '单次调仓双边换手', fx(o.turn * 100, 1) + '%', `<span>年化 ${fx(o.annTurn, 1)}x</span>`)
+    + kpi('p-enc', '有效持股数 ENC', String(o.enc), `<span>单股上限 ${fx(p.wmax, 1)}%</span>`);
+  $('#pf-banner').innerHTML = o.breach.length
+    ? `<div class="gs fail" style="width:100%"><b>风控门禁 BLOCK</b><span>${o.breach.join(' / ')} ${sg(o.post.size)}σ 越过 ±0.5σ 硬边界 · 约 ${fx(1.9 * o.post.size, 1)}%/yr 超额为小盘 Beta</span><button class="btn sm warnb" style="margin-left:auto" data-act="applySize" data-v="0.3">收紧至 ±0.30σ</button></div>`
+    : `<div class="gs pass" style="width:100%"><b>风控门禁 PASS</b><span>CNE6 十项风格暴露均在 ±0.5σ 内 · 行业偏离 ≤ ±${fx(p.ind, 1)}% · TE ${fx(o.teExp, 2)}%</span></div>`;
+  $('#pf-code').innerHTML = pfCode(p);
+  $('#pf-solv').innerHTML = `${tag('pass', 'OPTIMAL')}<span>CLARABEL · ${30 + Math.round(p.lam * 6 + (8 - p.te))}ms · ${thou(UNI[S.uni].n)} vars</span>`;
+  drawTornado($('#c-tor'), o);
+  plotBars($('#c-ind'), { values: o.dev, labels: SW, gap: 6, yFmt: v => v.toFixed(0) + '%', hlines: [{ v: p.ind, color: 'var(--warn)', label: '+' + fx(p.ind, 1) + '%' }, { v: -p.ind, color: 'var(--warn)', label: '-' + fx(p.ind, 1) + '%' }], tip: (v, i) => `${SW[i]} · 主动偏离 ${sg(v, 2)}%`, pad: { l: 34 } });
+  $('#pf-indnote').textContent = `|偏离| 均值 ${fx(mean(o.dev.map(Math.abs)), 2)}% · 触限 ${o.dev.filter(v => Math.abs(v) >= p.ind - 1e-9).length} 个行业`;
+  const hh = holdHTML(p, o); $('#pf-hold').innerHTML = hh.html; $('#pf-holdnote').textContent = hh.note;
+}
+DRAW.portfolio = updPf;
+
+/* =====================================================================
+ * 视图 4 · 机构级回测与业绩归因（Q5）
+ * ===================================================================== */
+const BT = { key: '', val: null };
+function btData() {
+  const key = S.uni + S.engine + S.obj + JSON.stringify(S.pf);
+  if (BT.key === key) return BT.val;
+  const o = optimize(), mk = market(S.uni), N = DAYS.length, target = S.engine === 'event' ? o.net : o.gross;
+  const R = rng(hash('bt' + S.uni)), sd = o.teExp / 100 / Math.sqrt(260), z = DAYS.map(() => gauss(R)), zm = mean(z), sizeK = o.post.size / .62;
+  const sh = DAYS.map(d => (d >= '2024-01-22' && d <= '2024-02-08' ? -.0042 : d > '2024-02-08' && d <= '2024-03-12' ? .0011 : d >= '2025-04-03' && d <= '2025-04-10' ? -.0035 : 0) * (.55 + .45 * sizeK));
+  const mu = (Math.log(1 + target / 100) * YRS - sh.reduce((a, b) => a + b, 0)) / N;
+  let ce = 0; const exl = z.map((v, i) => (ce += mu + (v - zm) * sd + sh[i]));
+  const e0 = Math.exp(exl[0]), exn = exl.map(v => Math.exp(v) / e0), bench = mk, strat = bench.map((b, i) => b * exn[i]);
+  const dd = a => { let pk = -Infinity; return a.map(v => { pk = Math.max(pk, v); return v / pk - 1; }); };
+  const sdd = dd(strat), edd = dd(exn), rets = exl.slice(1).map((v, i) => v - exl[i]);
+  const ann = a => Math.pow(a[a.length - 1] / a[0], 1 / YRS) - 1;
+  const aS = ann(strat), aB = ann(bench), aE = ann(exn), pos = rets.filter(r => r > 0), neg = rets.filter(r => r < 0);
+  const yr = y => { const a = idxOf(DAYS, y + '-01-01'), b = y === 2026 ? N - 1 : idxOf(DAYS, (y + 1) + '-01-01') - 1; return (exn[b] / exn[Math.max(0, a - 1)] - 1) * 100; };
+  const mdd = Math.min(...sdd), emdd = Math.min(...edd);
+  return (BT.key = key, BT.val = { o, strat, bench, exn, sdd, edd, aS, aB, aE, ir: aE / (std(rets) * Math.sqrt(260)), mdd, emdd, calmar: aS / Math.abs(mdd), win: pos.length / rets.length, plr: mean(pos) / Math.abs(mean(neg)), years: { 2024: yr(2024), 2025: yr(2025), 2026: yr(2026) } });
+}
+function attrib(b) {
+  const o = b.o, E = b.aE * 100;
+  const c = { size: 1.9 * o.post.size, mom: .42, vol: .27, val: .21, ind: .9 * Math.sqrt(S.pf.ind / 3), inter: .18 };
+  c.style = c.size + c.mom + c.vol + c.val; c.alpha = E - c.style - c.ind - c.inter; c.E = E;
+  return c;
+}
+const AUDIT = [['11-21', '002558.SZ', '巨人网络', '买', '一字涨停 · 买单未成交', 4.1], ['11-18', '300759.SZ', '康龙化成', '卖', '一字跌停 · 卖单排队失败', 6.8], ['11-12', '000831.SZ', '中国稀土', '买', 'POV>10% · 截断至 62%', 2.3], ['11-06', '600216.SH', '浙江医药', '卖', '临时停牌 · 持仓冻结 3D', 3.6], ['10-29', '000630.SZ', '铜陵有色', '卖', 'T+1 · 当日买入不可卖', 1.2], ['10-22', '002384.SZ', '东山精密', '买', '封板 · 部分成交 37%', 2.9]];
+V.backtest = () => {
+  const b = btData(), o = b.o, ev = S.engine === 'event', c = attrib(b), u = UNI[S.uni];
+  const K = kpi('b1', '年化收益', sg(b.aS * 100, 2) + '%', `<span>2024-01 → 2026-11</span>`)
+    + kpi('b2', '基准收益 ' + u.code, sg(b.aB * 100, 2) + '%', `<span>${u.label} 全收益</span>`)
+    + kpi('b3', '年化超额 Alpha', sg(b.aE * 100, 2) + '%', ev ? tag('pass', 'NET') + '<span>扣全部摩擦</span>' : tag('warn', 'GROSS') + '<span>未计摩擦</span>')
+    + kpi('b4', '信息比率 IR', fx(b.ir, 2), `<span>TE ${fx(o.teExp, 2)}%</span>`)
+    + kpi('b5', '最大回撤', fx(b.mdd * 100, 2) + '%', '<span>2024-02 微盘踩踏</span>')
+    + kpi('b6', '超额最大回撤', fx(b.emdd * 100, 2) + '%', '<span>多空相对基准</span>')
+    + kpi('b7', 'Calmar', fx(b.calmar, 2), '<span>年化 / |MDD|</span>')
+    + kpi('b8', '日胜率 / 盈亏比', fx(b.win * 100, 1) + '% / ' + fx(b.plr, 2), '<span>超额口径</span>')
+    + kpi('b9', '年化双边换手', fx(o.annTurn * 100, 0) + '%', `<span>单次 ${fx(o.turn * 100, 1)}%</span>`)
+    + kpi('b10', '交易摩擦总损耗', ev ? fx(o.costBps, 0) + ' bps/年' : '0 bps/年', ev ? `<span>冲击 ${fx(o.cc.imp * 100, 0)} · 涨跌停 ${fx(o.cc.lim * 100, 0)}</span>` : tag('warn', '向量化未计入'));
+  const segs = [['纯选股残差 Alpha', c.alpha, 'var(--sig)'], ['风格 Beta', c.style, 'var(--warn)'], ['行业配置', c.ind, 'var(--tx3)'], ['交互/其他', c.inter, 'var(--line2)']];
+  const share = v => v / c.E * 100, sa = share(c.alpha);
+  const yk = { 2024: [-.5, 1], 2025: [1.6, 1], 2026: [1.1, .9] };
+  const row = (n, v, k, cls = '') => { const ys = [2024, 2025, 2026].map(y => k === 'alpha' ? null : v * (k === 'size' ? yk[y][0] : 1) * yk[y][1]); return { n, v, k, ys, cls }; };
+  const rws = [row('风格 Beta · Size', c.size, 'size'), row('风格 Beta · Momentum', c.mom, 'mom'), row('风格 Beta · Volatility', c.vol, 'vol'), row('风格 Beta · Value (BTOP/EY)', c.val, 'val'), row('行业配置效应 (Brinson)', c.ind, 'ind'), row('交互项 / 其他', c.inter, 'inter')];
+  const alphaY = [2024, 2025, 2026].map((y, j) => b.years[y] - rws.reduce((a, r) => a + r.ys[j], 0));
+  const tr = (n, ys, v, cls) => `<tr class="${cls}"><td>${n}</td>${ys.map(x => `<td class="n ${x >= 0 ? 'c-up' : 'c-dn'}">${sg(x, 2)}%</td>`).join('')}<td class="n"><b>${sg(v, 2)}%</b></td><td class="n">${fx(share(v), 1)}%<span class="bar-in" style="width:${clamp(Math.abs(share(v)) * .5, 1, 40)}px;background:${n.startsWith('纯') ? 'var(--sig)' : n.startsWith('风格') ? 'var(--warn)' : 'var(--tx3)'}"></span></td></tr>`;
+  const attrTbl = `<table class="tbl dense"><thead><tr><th>归因分量</th><th class="n">2024</th><th class="n">2025</th><th class="n">2026 YTD</th><th class="n">全区间年化</th><th class="n">占超额</th></tr></thead><tbody>${tr('纯选股残差 Alpha', alphaY, c.alpha, 'sel')}${rws.map(r => tr(r.n, r.ys, r.v, '')).join('')}<tr><td><b>合计 = 年化超额</b></td>${[2024, 2025, 2026].map(y => `<td class="n"><b>${sg(b.years[y], 2)}%</b></td>`).join('')}<td class="n"><b>${sg(c.E, 2)}%</b></td><td class="n">100.0%</td></tr></tbody></table>`;
+  const audit = `<table class="tbl dense"><thead><tr><th>日期</th><th>标的</th><th>方向</th><th>失败原因</th><th class="n">损耗 bps</th></tr></thead><tbody>${AUDIT.map(([d, cd, nm, sd, rs, l]) => `<tr><td class="mono sub">${d}</td><td><span class="mono" style="font-size:10.5px">${cd}</span> <span class="sub">${nm}</span></td><td class="${sd === '买' ? 'c-up' : 'c-dn'}">${sd}</td><td>${rs}</td><td class="n">${fx(l * u.imp, 1)}</td></tr>`).join('')}</tbody></table><div style="display:flex;justify-content:space-between;padding:7px 10px;border-top:1px solid var(--line);font:10.5px var(--f-mono);color:var(--tx3)"><span>撮合失败 47 / 12,846 笔 · 0.37%</span><span>涨跌停/停牌损耗 <b class="c-warn">${fx(o.cc.lim * 100, 0)} bps/年</b></span></div>`;
+  return `<div class="stack">
+  ${vh('/backtest', ['Q5'], '机构级回测与业绩归因', `${u.label} · 2024-01-02 → 2026-11-25 · 周频调仓 · T+1 VWAP 成交 · 非复权真实成交价 + 分红送转现金流`,
+    `${prd('Q5.1')}<div class="seg"><button class="${!ev ? 'on' : ''}" data-act="engine" data-v="vector">向量化快筛</button><button class="${ev ? 'on' : ''}" data-act="engine" data-v="event">事件驱动高保真</button></div><button class="btn" data-act="cmd" data-v="feishu">${ic('send', 11)}推送日报</button>`)}
+  <div class="kpis k5 two">${K}</div>
+  ${panel('策略 / 基准 / 超额净值 · 水下回撤 (Underwater)', '<div class="cv" id="c-nav" style="height:212px"></div><div class="cv" id="c-dd" style="height:92px;margin-top:4px"></div>', { prd: 'Q5.3', tools: `<span class="lg"><span><i style="background:var(--tx)"></i>策略</span><span><i style="background:var(--tx3)"></i>基准</span><span><i style="background:var(--sig)"></i>超额</span><span><i class="bx" style="background:var(--dn);opacity:.6"></i>策略回撤</span><span><i style="background:var(--warn)"></i>超额回撤</span></span>` })}
+  <div class="bg2">
+    ${panel('A 股微结构撮合损耗拆解 · 年化超额 (%)', '<div class="cv" id="c-fall" style="height:248px"></div>', { prd: 'Q5.2', tools: tag(ev ? 'warn' : 'mute', ev ? '摩擦 ' + fx(o.costBps, 0) + ' bps/年' : '向量化 · 仅示意') })}
+    ${panel('撮合失败审计 · 最近 6 笔', audit, { prd: 'Q5.2', flush: true, tools: '<span class="ps">事件驱动引擎</span>' })}
+  </div>
+  ${panel('Brinson + Barra 因子收益归因 · 真假 Alpha 甄别', `<div class="attr">${segs.map(([n, v, cl]) => `<div style="flex:${Math.max(v, .05).toFixed(3)};background:${cl}" data-tip="${esc(n + ' ' + sg(v, 2) + '%/年 · 占超额 ' + fx(share(v), 1) + '%')}">${share(v) > 9 ? n + ' ' + fx(share(v), 0) + '%' : ''}</div>`).join('')}</div>${attrTbl}`, { prd: 'Q5.3', tools: sa >= 65 ? tag('pass', '真 Alpha 主导 · ' + fx(sa, 0) + '%') : tag('warn', '风格 Beta 偏高 · Alpha ' + fx(sa, 0) + '%') })}
+  </div>`;
+};
+function drawWaterfall(el, o) {
+  if (!el) return; const W = el.clientWidth, H = el.clientHeight; if (!W) return;
+  const items = [['理想无摩擦', o.gross, 1], ['双边佣金', -o.cc.comm], ['印花税', -o.cc.stamp], ['过户费', -o.cc.xfer], ['冲击滑点', -o.cc.imp], ['涨跌停停牌', -o.cc.lim], ['真实净超额', o.net, 1]];
+  const P = { l: 36, r: 8, t: 18, b: 36 }, n = items.length, iw = W - P.l - P.r, ih = H - P.t - P.b, bw = iw / n;
+  const d = nice(0, o.gross * 1.06, 4), Y = v => P.t + ih - v / d.hi * ih;
+  let g = '';
+  d.ticks.forEach(t => { const y = Y(t).toFixed(1); g += `<line x1="${P.l}" x2="${W - P.r}" y1="${y}" y2="${y}" class="${t ? 'grid' : 'base'}"/><text x="${P.l - 6}" y="${+y + 3}" class="ax" text-anchor="end">${t}%</text>`; });
+  let cur = o.gross;
+  items.forEach(([nm, v, tot], i) => {
+    const x = P.l + i * bw + bw * .18, w = bw * .64; let a, b2;
+    if (tot) { a = 0; b2 = v; } else { a = cur + v; b2 = cur; cur += v; }
+    const y = Y(b2), h = Math.max(1, Y(a) - Y(b2));
+    g += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${w.toFixed(1)}" height="${h.toFixed(1)}" style="fill:${tot ? 'var(--sig)' : 'var(--dn)'};opacity:${tot && i === 0 ? .5 : .9}" data-tip="${esc(`${nm} ${tot ? fx(v, 2) + '%' : sg(v, 3) + '% · ' + fx(-v * 100, 1) + ' bps/年'}`)}"/>`;
+    g += `<text x="${(x + w / 2).toFixed(1)}" y="${(y - 4).toFixed(1)}" class="axl" text-anchor="middle" style="${tot ? 'fill:var(--tx);font-weight:600' : ''}">${tot ? fx(v, 2) + '%' : sg(v, 2)}</text>`;
+    if (i < n - 1) { const ny = tot ? Y(v) : Y(cur); g += `<line x1="${(x + w).toFixed(1)}" x2="${(x + bw).toFixed(1)}" y1="${ny.toFixed(1)}" y2="${ny.toFixed(1)}" style="stroke:var(--tx3);stroke-dasharray:2 2"/>`; }
+    g += `<text x="${(x + w / 2).toFixed(1)}" y="${H - 20}" text-anchor="middle" style="fill:var(--tx2);font-size:10px;font-family:var(--f-sans)">${nm}</text><text x="${(x + w / 2).toFixed(1)}" y="${H - 7}" class="ax" text-anchor="middle">${tot ? (i ? 'NET' : 'GROSS') : fx(-v * 100, 0) + 'bp'}</text>`;
+  });
+  el.innerHTML = svgWrap(W, H, g);
+}
+DRAW.backtest = () => {
+  const b = btData();
+  plotLines($('#c-nav'), { xs: DAYS, sync: 'bt', base: 1, bands: CYC, yFmt: v => v.toFixed(2), ticks: 4, series: [{ name: '策略', data: b.strat, color: 'var(--tx)', w: 1.5 }, { name: '基准 ' + UNI[S.uni].code, data: b.bench, color: 'var(--tx3)', w: 1.2 }, { name: '超额净值', data: b.exn, color: 'var(--sig)', w: 1.6, area: true, areaBase: 1, areaOp: .08 }] });
+  plotLines($('#c-dd'), { xs: DAYS, sync: 'bt', yFmt: v => (v * 100).toFixed(0) + '%', ticks: 3, yHi: 0, pad: { t: 4 }, series: [{ name: '策略回撤', data: b.sdd, color: 'var(--dn)', w: 1, area: true, areaOp: .25, fmt: v => fx(v * 100, 2) + '%' }, { name: '超额回撤', data: b.edd, color: 'var(--warn)', w: 1.2, fmt: v => fx(v * 100, 2) + '%' }] });
+  drawWaterfall($('#c-fall'), S.engine === 'event' ? b.o : Object.assign({}, b.o, { net: b.o.gross - b.o.cost }));
+};
+
+/* =====================================================================
+ * 视图 5 · 量化数据底座与质量哨兵（Q1）
+ * ===================================================================== */
+const DS = [
+  ['日频 OHLCV（不复权 + 复权因子）', '1D', 'Tushare Pro', 'AkShare', '99.98%', '2026-11-25 15:32', 'PASS', 42.6, '3m', 'OK'],
+  ['分钟 OHLCV（1min）', '1m', '本地 L1 落盘', 'JQData', '99.71%', '2026-11-25 15:41', 'N/A', 684.2, '11m', 'OK'],
+  ['PIT 资产负债表', 'Q', 'Tushare Pro', '巨潮公告解析', '99.42%', 'ann 2026-11-24', 'PASS', 6.1, '—', 'OK'],
+  ['PIT 利润表', 'Q', 'Tushare Pro', '巨潮公告解析', '99.47%', 'ann 2026-11-24', 'PASS', 5.8, '—', 'OK'],
+  ['PIT 现金流量表', 'Q', 'Tushare Pro', '巨潮公告解析', '99.31%', 'ann 2026-11-24', 'PASS', 5.2, '—', 'OK'],
+  ['退市股与历史指数成分', '1D', '中证指数官网', 'Tushare Pro', '100.00%', '2026-11-25 16:05', 'PASS', .4, '2m', 'OK'],
+  ['申万历史行业变动（2014/2021）', 'EVT', '申万宏源', 'Tushare Pro', '100.00%', '2026-11-22 09:00', 'PASS', .1, '—', 'OK'],
+  ['两融明细', '1D', '沪深交易所', 'AkShare', '98.86%', '2026-11-24 (T-1)', 'N/A', 3.3, '—', 'LAG'],
+  ['龙虎榜', '1D', '沪深交易所', 'AkShare', '99.90%', '2026-11-25 17:10', 'N/A', .9, '—', 'OK'],
+  ['股指期货基差（IF/IC/IM）', '1D', 'CFFEX', 'Tushare Pro', '100.00%', '2026-11-25 15:20', 'N/A', .2, '1m', 'OK'],
+  ['一致预期（EPS FY1/FY2）', '1W', '朝阳永续', 'Wind（备）', '96.20%', '2026-11-21 18:00', 'PASS', 2.7, '—', 'WARN'],
+  ['分红送转与复权锚点', 'EVT', '巨潮公告', 'Tushare Pro', '100.00%', '2026-11-25 16:30', 'PASS', .3, '4m', 'OK']
+];
+const GUARD = [['退市股历史保留率', '100.00%', '412 / 412 只已退市标的完整保留至退市日'], ['财报重述 PIT 隔离', 'PASS', '1,284 条重述按 ann_date 生效 · 0 条回填'], ['复权因子锚点校验', 'PASS', '5,318 只 · 64 锚点抽样 · 最大偏移 0.00bp'], ['缺失值≠0 断言', 'PASS', '0 处 NaN→0 静默填充 · 停牌日保持 NaN'], ['历史成分 PIT 快照', 'PASS', '300/500/1000 共 2,086 次调样逐日回放一致'], ['未来函数静态扫描', 'PASS', '312 个因子表达式 · 0 处 shift(-n)']];
+const MCP = [['quant_data_health', 'READ', 214, 38, 96], ['quant_query_pit_panel', 'READ', 1342, 122, 410], ['quant_universe_constituents', 'READ', 388, 21, 64], ['quant_eval_factor', 'READ', 96, 412, 1180], ['quant_factor_correlation', 'READ', 71, 286, 742], ['quant_submit_factor_hypothesis', 'ASK+BG', 6, 94000, 312000], ['quant_run_cpcv_gate', 'BG', 14, 41800, 131000], ['quant_list_experiments', 'READ', 157, 18, 52], ['quant_barra_exposure', 'READ', 83, 186, 433], ['quant_optimize_portfolio', 'READ', 41, 640, 1520], ['quant_run_backtest', 'ASK+BG', 9, 212000, 540000], ['quant_attribution_tearsheet', 'READ', 27, 920, 2300], ['quant_shadow_drift_check', 'READ', 48, 340, 880]];
+V.data = () => {
+  const tot = DS.reduce((a, r) => a + r[7], 0), calls = MCP.reduce((a, r) => a + r[2], 0);
+  const stT = s => s === 'OK' ? '<span class="st c-pass"><i style="background:var(--pass)"></i>OK</span>' : s === 'LAG' ? '<span class="st c-warn"><i style="background:var(--warn)"></i>T-1 LAG</span>' : '<span class="st c-warn"><i style="background:var(--warn)"></i>覆盖 WARN</span>';
+  const rows = DS.map(r => `<tr><td>${r[0]}</td><td class="mono sub">${r[1]}</td><td>${r[2]}<span class="sub"> / ${r[3]}</span></td><td class="n">${r[4]}</td><td class="mono sub">${r[5]}</td><td>${r[6] === 'PASS' ? tag('pass', 'PASS') : tag('mute', 'N/A')}</td><td class="n">${r[7] >= 100 ? fx(r[7], 0) : fx(r[7], 1)} GB</td><td class="n">${r[8]}</td><td>${stT(r[9])}</td></tr>`).join('');
+  const sideT = s => s === 'READ' ? tag('mute', 'READ') : s === 'BG' ? tag('info', 'BG_RUN') : tag('warn', 'ASK·BG');
+  const mrows = MCP.map(([n, s, c, p50, p95]) => `<tr><td class="mono" style="font-size:10px"><span class="c-3">quant_</span>${n.slice(6)}</td><td>${sideT(s)}</td><td class="n">${thou(c)}</td><td class="n c-2">${fmtMs(p50)}</td><td class="n">${fmtMs(p95)}<span class="bar-in" style="width:${(3 + 16 * Math.log10(p95 / 10) / Math.log10(60000)).toFixed(0)}px;background:${p95 > 60000 ? 'var(--warn)' : 'var(--sig)'}"></span></td></tr>`).join('');
+  return `<div class="stack">
+  ${vh('/data', ['Q1'], '量化数据底座与质量哨兵', '多源接入 · 主备切换 · DuckDB + Parquet + Qlib Bin + PG Metadata · 零幸存者偏差 / PIT / 复权自动化审计', `<span class="tag pass">DAG quant_ingest_eod #2214 · OK</span><button class="btn" data-act="dqRun">${ic('sync', 11)}立即重跑审计</button>`)}
+  <div class="kpis k5">${kpi('d1', '核心数据集', '12', tag('pass', '10 OK') + tag('warn', '2 WARN'))}${kpi('d2', 'DuckDB + Parquet', fx(tot, 1) + ' GB', '<span>zstd · 按 trade_date 分区</span>')}${kpi('d3', 'Qlib Bin 同步延迟 P95', '11m', '<span>dump_bin 增量 · 17:20</span>')}${kpi('d4', 'PIT 对账', '8 / 8', tag('pass', 'PASS') + '<span>ann_date ≠ end_date</span>')}${kpi('d5', '主备源切换 · 24h', '0 次', '<span>熔断阈值 3 次失败</span>')}</div>
+  ${panel('数据管道健康矩阵 · 12 类核心量化数据集', `<table class="tbl dense"><thead><tr><th>数据集</th><th>频率</th><th>主源 / 备源</th><th class="n">覆盖率</th><th>最新快照 as_of</th><th>PIT 对账</th><th class="n">磁盘占用</th><th class="n">Qlib 延迟</th><th>状态</th></tr></thead><tbody>${rows}</tbody></table>`, { prd: 'Q1.1', flush: true, tools: `${prd('Q1.2')}<span class="ps">DuckDB 1.2 · Parquet zstd · Qlib Bin · PG metadata</span>` })}
+  <div class="g2" style="grid-template-columns:minmax(0,1fr) minmax(0,1.3fr)">
+    ${panel('零偏差审计哨兵 · Bias &amp; Integrity Guard', `<div class="guard">${GUARD.map(([t, v, d]) => `<div class="gc"><div class="gh"><span>${t}</span>${tag('pass', 'PASS')}</div><div class="gv">${v}</div><p title="${esc(d)}">${d}</p></div>`).join('')}</div><div class="solv" style="margin-top:8px">${ic('clock', 11)}最近校验 2026-11-25 16:20:14 · quant_dq_nightly #1187 · 用时 4m12s</div>`, { prd: 'Q1.3' })}
+    ${panel(`Quant MCP · ${MCP.length} Tools · 延迟监控`, `<table class="tbl dense"><thead><tr><th>Tool</th><th>副作用</th><th class="n">24h</th><th class="n">P50</th><th class="n">P95</th></tr></thead><tbody>${mrows}</tbody></table>`, { prd: 'Q7.1', flush: true, tools: `<span class="ps">v0.4.2 · ${thou(calls)} 次/24h</span>` })}
+  </div></div>`;
+};
+
+/* =====================================================================
+ * 视图 6 · 影子实盘与因子衰减监控（Q6）
+ * ===================================================================== */
+const SHF = [['alpha_earn_sue_pit', .047, 71, .38, 'ACTIVE'], ['alpha_vp_corr_20d', .049, 64, .45, 'ACTIVE'], ['alpha_mom_resid_60d', .021, 18, .52, 'DEGRADING'], ['alpha_smart_money_vwap', .018, 9, .86, 'DEGRADING'], ['rev_5d_liq_adj', -.006, 2, .91, 'KILL-SWITCH'], ['alpha_north_flow_chg_20d', .003, 4, .22, 'KILL-SWITCH']];
+const SH = { key: '', val: null };
+function shData() {
+  const o = optimize(), key = S.uni + fx(o.net, 3);
+  if (SH.key === key) return SH.val;
+  const xs = DAYS.slice(-60), R = rng(hash('sh' + S.uni)), u = UNI[S.uni], mu = o.net / 260 * 100;
+  let th = 0, dv = 0; const T = [], Sh = [], gap = [], liq = [], lim = [];
+  xs.forEach(() => {
+    th += mu + gauss(R) * 26; const g1 = (gauss(R) * 1.1 - .15) * u.imp, l1 = -(.25 + .2 * Math.abs(gauss(R))) * u.imp, m1 = R() < .08 ? -(2.5 + R() * 3.5) * u.imp : 0;
+    gap.push(g1); liq.push(l1); lim.push(m1); dv += g1 + l1 + m1; T.push(th); Sh.push(th + dv);
+  });
+  const sum = a => a.reduce((x, y) => x + y, 0), dev = xs.map((_, i) => gap[i] + liq[i] + lim[i]);
+  return (SH.key = key, SH.val = { xs, th: T, sh: Sh, gap, liq, lim, is: dv, avgAbs: mean(dev.map(Math.abs)), sGap: sum(gap), sLiq: sum(liq), sLim: sum(lim), nLim: lim.filter(v => v < 0).length });
+}
+function spark(name, st, v) {
+  const R = rng(hash('sp' + name)), n = 28, a = st === 'ACTIVE' ? v : st === 'DEGRADING' ? v * 2.4 : .045, pts = [];
+  for (let i = 0; i < n; i++) pts.push(a + (v - a) * Math.pow(i / (n - 1), 1.3) + (R() - .5) * .012);
+  const lo = -.02, hi = .1, X = i => 2 + i * 92 / (n - 1), Y = x => 20 - (x - lo) / (hi - lo) * 18;
+  const col = st === 'ACTIVE' ? 'var(--sig)' : st === 'DEGRADING' ? 'var(--warn)' : 'var(--up)';
+  return `<svg width="96" height="22" style="display:block"><line x1="2" x2="94" y1="${Y(0).toFixed(1)}" y2="${Y(0).toFixed(1)}" style="stroke:var(--line2);stroke-dasharray:2 2"/><path d="${pts.map((p, i) => (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y(p).toFixed(1)).join('')}" fill="none" style="stroke:${col};stroke-width:1.3"/></svg>`;
+}
+V.shadow = () => {
+  const d = shData(), u = UNI[S.uni];
+  const stT = s => s === 'ACTIVE' ? tag('pass', 'ACTIVE') : s === 'DEGRADING' ? tag('warn', 'DEGRADING') : tag('fail', 'KILL-SWITCH');
+  const rows = SHF.map(([n, ic60, pct, cr, st]) => { const v = ic60 * u.ic; return `<tr><td class="mono" style="font-size:11px">${n}</td><td class="n ${v < 0 ? 'c-dn' : ''}">${sg(v, 4)}</td><td class="n">${pct}%<span class="bar-in" style="width:${(pct * .36).toFixed(0)}px;background:${pct < 20 ? 'var(--warn)' : 'var(--sig)'}"></span></td><td class="n ${cr > .8 ? 'c-up' : ''}">${fx(cr)}<span class="bar-in" style="width:${(cr * 36).toFixed(0)}px;background:${cr > .8 ? 'var(--up)' : 'var(--tx3)'}"></span></td><td>${spark(n, st, v)}</td><td>${stT(st)}</td><td><button class="btn sm ${st !== 'ACTIVE' ? 'warnb' : ''}" data-act="diag" data-v="${n}">${ic('route', 11)}派发 Bot 诊断</button></td></tr>`; }).join('');
+  return `<div class="stack">
+  ${vh('/shadow', ['Q6'], '影子实盘与因子衰减监控', `Shadow Portfolio 每日自动调仓模拟 · 实盘 vs 回测漂移归因 · 因子 IC 衰减 / 拥挤度 / Regime Shift 预警 · ${u.label}`, `<span class="tag info">SHADOW · 第 214 个交易日</span>${prd('Q6.3')}<span class="tag pass">${ic('lock', 10)}SIGNAL-ONLY</span>`)}
+  <div class="kpis k5">${kpi('s1', '60D Implementation Shortfall', fx(d.is, 0) + ' bps', '<span>影子 − 理论 · 累计</span>')}${kpi('s2', '日均跟踪偏离', fx(d.avgAbs, 2) + ' bps', '<span>mean |Δ| · 60D</span>')}${kpi('s3', '开盘跳空损耗', sg(d.sGap, 0) + ' bps', '<span>集合竞价 vs VWAP</span>')}${kpi('s4', '流动性冲击', sg(d.sLiq, 0) + ' bps', '<span>平方根冲击 · POV 10%</span>')}${kpi('s5', '涨跌停排队失败', sg(d.sLim, 0) + ' bps', `<span>${d.nLim} 次 / 60D</span>`)}</div>
+  <div class="sg2">
+    ${panel('影子 vs 理论净值漂移 · Shortfall', '<div class="cv" id="c-sh" style="height:262px"></div>', { prd: 'Q6.1', tools: `<span class="lg"><span><i style="border-top:1.5px dashed var(--tx2);height:0"></i>理论</span><span><i style="background:var(--sig)"></i>影子</span><span><i class="bx" style="background:var(--warn)"></i>跳空</span><span><i class="bx" style="background:var(--sig);opacity:.55"></i>流动性</span><span><i class="bx" style="background:var(--up)"></i>涨跌停</span></span>` })}
+    ${panel('研究 / 交易隔离 · Authority Gate', `<div class="gs pass" style="margin-bottom:8px"><b>SIGNAL-ONLY</b><span>未配置任何券商下单接口</span></div><div class="sigf"><div><span>target_weights.csv</span><b>102 行</b></div><div><span>orders_draft.csv</span><b>37 笔</b></div><div><span>risk_review.md</span><b>Risk-PM 生成</b></div><div><span>sha256</span><b>8f3a…c41e</b></div><div><span>approvalMode</span><b class="c-warn">ask · 待 PM 签核</b></div><div><span>交易通道</span><b class="c-pass">0 个 · 硬隔离</b></div></div><button class="btn" style="width:100%;margin-top:9px;justify-content:center" data-act="exportSignal">${ic('file', 12)}导出调仓清单（需 PM 签核）</button>`, { prd: 'Q6.3' })}
+  </div>
+  ${panel('在运行 Alpha 因子 · 拥挤度与滚动 IC 衰减预警', `<table class="tbl dense"><thead><tr><th>因子</th><th class="n">60D RankIC</th><th class="n">历史分位</th><th class="n">拥挤度指数</th><th>IC 趋势 · 120D</th><th>健康状态</th><th>操作</th></tr></thead><tbody>${rows}</tbody></table>`, { prd: 'Q6.2', flush: true, tools: '<span class="ps">Routine quant.factor_decay_watch · 每日 15:05</span>' })}
+  </div>`;
+};
+function drawShadow(el, d) {
+  if (!el) return; const W = el.clientWidth, H = el.clientHeight; if (!W) return;
+  const P = { l: 46, r: 10, t: 14, b: 20 }, n = d.xs.length, iw = W - P.l - P.r, hh = H - P.t - P.b - 18, h1 = hh * .56, h2 = hh - h1, t2 = P.t + h1 + 18;
+  const bw = iw / n, X = i => P.l + (i + .5) * bw;
+  const d1 = nice(Math.min(0, ...d.th, ...d.sh), Math.max(...d.th, ...d.sh), 3), Y1 = v => P.t + h1 - (v - d1.lo) / (d1.hi - d1.lo) * h1;
+  const pos = d.xs.map((_, i) => [d.gap[i], d.liq[i], d.lim[i]].filter(v => v > 0).reduce((a, b) => a + b, 0));
+  const neg = d.xs.map((_, i) => [d.gap[i], d.liq[i], d.lim[i]].filter(v => v < 0).reduce((a, b) => a + b, 0));
+  const d2 = nice(Math.min(...neg), Math.max(1, ...pos), 3), Y2 = v => t2 + h2 - (v - d2.lo) / (d2.hi - d2.lo) * h2;
+  let g = `<text x="${P.l}" y="${P.t - 4}" class="ax">累计超额 (bps)</text><text x="${P.l}" y="${t2 - 5}" class="ax">每日偏离归因 (bps)</text>`;
+  d1.ticks.forEach(t => { const y = Y1(t).toFixed(1); g += `<line x1="${P.l}" x2="${W - P.r}" y1="${y}" y2="${y}" class="${t ? 'grid' : 'base'}"/><text x="${P.l - 6}" y="${+y + 3}" class="ax" text-anchor="end">${t}</text>`; });
+  d2.ticks.forEach(t => { const y = Y2(t).toFixed(1); g += `<line x1="${P.l}" x2="${W - P.r}" y1="${y}" y2="${y}" class="${t ? 'grid' : 'base'}"/><text x="${P.l - 6}" y="${+y + 3}" class="ax" text-anchor="end">${t}</text>`; });
+  const pth = a => a.map((v, i) => (i ? 'L' : 'M') + X(i).toFixed(1) + ' ' + Y1(v).toFixed(1)).join('');
+  const back = d.sh.map((v, i) => [X(i), Y1(v)]).reverse().map(([x, y]) => 'L' + x.toFixed(1) + ' ' + y.toFixed(1)).join('');
+  g += `<path d="${pth(d.th)}${back}Z" style="fill:var(--warn);opacity:.13"/><path d="${pth(d.th)}" fill="none" style="stroke:var(--tx2);stroke-width:1.3;stroke-dasharray:4 3"/><path d="${pth(d.sh)}" fill="none" style="stroke:var(--sig);stroke-width:1.7"/>`;
+  g += `<text x="${(X(n - 1) - 4).toFixed(1)}" y="${(Y1(d.th[n - 1]) - 6).toFixed(1)}" text-anchor="end" style="fill:var(--tx2);font-size:9.5px">理论 ${fx(d.th[n - 1], 0)}</text><text x="${(X(n - 1) - 4).toFixed(1)}" y="${(Y1(d.sh[n - 1]) + 13).toFixed(1)}" text-anchor="end" style="fill:var(--sig);font-size:9.5px">影子 ${fx(d.sh[n - 1], 0)} · IS ${fx(d.is, 0)}</text>`;
+  const cols = ['var(--warn)', 'var(--sig)', 'var(--up)'], ops = [.9, .55, .95];
+  d.xs.forEach((dt, i) => {
+    let up = 0, dn = 0; [d.gap[i], d.liq[i], d.lim[i]].forEach((v, k) => { let ya, yb; if (v >= 0) { ya = Y2(up + v); yb = Y2(up); up += v; } else { ya = Y2(dn); yb = Y2(dn + v); dn += v; } g += `<rect x="${(X(i) - bw * .34).toFixed(1)}" y="${ya.toFixed(1)}" width="${(bw * .68).toFixed(1)}" height="${Math.max(.5, yb - ya).toFixed(1)}" style="fill:${cols[k]};opacity:${ops[k]}"/>`; });
+    if (i % 10 === 0 || i === n - 1) g += `<text x="${X(i).toFixed(1)}" y="${H - 5}" class="ax" text-anchor="middle">${dt.slice(5)}</text>`;
+    const tot = d.gap[i] + d.liq[i] + d.lim[i];
+    g += `<rect x="${(P.l + i * bw).toFixed(1)}" y="${P.t}" width="${bw.toFixed(1)}" height="${H - P.t - P.b}" fill="transparent" data-tip="${esc(`<div class='th'>${dt}</div>理论 ${fx(d.th[i], 1)} · 影子 ${fx(d.sh[i], 1)} bps<br>开盘跳空 ${sg(d.gap[i], 2)} · 流动性 ${sg(d.liq[i], 2)}<br>涨跌停排队 ${sg(d.lim[i], 2)} · 合计 <b>${sg(tot, 2)}</b> bps`)}"/>`;
+  });
+  el.innerHTML = svgWrap(W, H, g);
+}
+DRAW.shadow = () => drawShadow($('#c-sh'), shData());
+DRAW.data = () => {};
+/* =====================================================================
+ * 左侧导航
+ * ===================================================================== */
+const NAVS = [['alpha', 'Alpha 因子工坊', '/alpha', 'Q2'], ['models', '多因子合成·过拟合', '/models', 'Q3'], ['portfolio', '组合优化·Barra', '/portfolio', 'Q4'], ['backtest', '回测与业绩归因', '/backtest', 'Q5'], ['data', '数据底座·质量哨兵', '/data', 'Q1'], ['shadow', '影子实盘·衰减监控', '/shadow', 'Q6']];
+const gateMini = e => e.gate === 'PROMOTED' ? tag('pass', 'PROMOTED') : e.gate === 'PASS' ? tag('info', 'PASS') : e.gate === 'BASELINE' ? tag('mute', 'BASELINE') : e.gate === 'HOLD' ? tag('warn', 'HOLD') : tag('fail', 'REJECTED');
+function renderNav() {
+  const ord = ['lgbm', 'ridge', 'cat', 'ols', 'rd42'].map(id => EXPS.find(e => e.id === id));
+  $('#nav').innerHTML = `<div class="nsec"><span>WORKSPACE</span><span>06</span></div>
+  ${NAVS.map(([k, l, p, q]) => `<button class="ni ${S.view === k ? 'on' : ''}" data-act="view" data-v="${k}">${ic(k, 16)}<b>${l}</b><small>${p}</small><em>${q}</em></button>`).join('')}
+  <div class="nsec" style="margin-top:8px;border-top:1px solid var(--line);padding-top:10px"><span>已入库实验</span><span>${String(EXPS.length).padStart(2, '0')}</span></div>
+  <div class="xl">${ord.map(e => `<button class="xi ${S.view === 'models' && S.exp === e.id ? 'on' : ''}" data-act="exp" data-v="${e.id}"><div><span>${e.code}</span>${gateMini(e)}</div><small>${e.name} · OOS ${fx(e.oos)}</small></button>`).join('')}</div>
+  <div class="nfoot">DuckDB+Parquet <b>${fx(DS.reduce((a, r) => a + r[7], 0), 1)} GB</b><br>Qlib Bin sync <b>11m</b> · DQ <b class="c-pass">PASS</b><br>quant-mcp <b>${MCP.length} tools</b> · v0.4.2</div>`;
+}
+
+/* =====================================================================
+ * Q7 · Agent Home Quant Bot 侧栏
+ * ===================================================================== */
+const BOTS = {
+  lead: { name: 'Quant-Lead Bot', short: 'Quant-Lead', role: '主研总助 · 永久记忆 + Routine', glyph: 'hex', moe: false, msgs: [], unread: 0, busy: false },
+  miner: { name: 'Alpha-Miner', short: 'Alpha-Miner', role: '因子挖掘 · CPCV 检验专家', glyph: 'dia', moe: true, msgs: [], unread: 1, busy: false },
+  risk: { name: 'Risk-PM', short: 'Risk-PM', role: 'Barra 约束 · 归因专家', glyph: 'sq', moe: true, msgs: [], unread: 1, busy: false }
+};
+const CMDS = [['ic', '/跑IC与10分层', 'play'], ['cpcv', '/CPCV过拟合体检', 'models'], ['barra', '/Barra风险诊断', 'shield'], ['feishu', '/推送飞书日报', 'send']];
+const trace = (tool, ms, args, ret, status) => ({ t: 'trace', tool, ms, args, ret, status: status || 'OK' });
+const botMsg = (b, html) => ({ t: 'bot', bot: b, html });
+function json(o) {
+  return esc(JSON.stringify(o, null, 2)).replace(/(&quot;(?:[^&]|&(?!quot;))*?&quot;)(\s*:)?|(-?\d+(?:\.\d+)?(?:e[+-]?\d+)?)|\b(true|false|null)\b/g,
+    (s, str, colon, num, kw) => str ? (colon ? `<span class="jk">${str}</span>${colon}` : `<span class="js">${str}</span>`) : num != null ? `<span class="jn">${num}</span>` : `<span class="jb">${kw}</span>`);
+}
+function ctxChips() {
+  const c = ['view:' + S.view];
+  if (S.view === 'alpha') { c.push('factor:' + S.factor); c.push('pipeline:' + (PIPE.filter(p => S.pipe[p.k]).map(p => p.short).join('+') || 'none')); }
+  if (S.view === 'models') c.push('exp:' + EXPS.find(e => e.id === S.exp).code);
+  if (S.view === 'portfolio') c.push(`cons:w≤${fx(S.pf.wmax, 1)}%,TE≤${fx(S.pf.te, 1)}%,size±${fx(S.pf.size, 2)}σ`);
+  if (S.view === 'backtest') c.push('engine:' + (S.engine === 'event' ? 'event-driven' : 'vectorized'));
+  if (S.view === 'data') c.push('dq:guard=PASS');
+  if (S.view === 'shadow') c.push('drift:60D');
+  c.push('universe:' + S.uni, 'pit:2026-11-25');
+  return c;
+}
+let LASTCHIPS = [];
+function renderCtx() {
+  const el = $('#cchips'); if (!el) return;
+  const c = ctxChips();
+  el.innerHTML = c.map(x => `<span class="cc ${LASTCHIPS.length && !LASTCHIPS.includes(x) ? 'fl' : ''}">${esc(x)}</span>`).join('');
+  LASTCHIPS = c;
+  $('#ctxTok').textContent = `+${Math.round(JSON.stringify(c).length / 3.1) + 58} tok · user-prefix`;
+}
+function renderTabs() {
+  $('#btabs').innerHTML = Object.entries(BOTS).map(([k, b]) => `<button class="btab ${S.bot === k ? 'on' : ''}" data-act="bot" data-v="${k}"><b>${ic(b.glyph, 12)}${b.short}${b.moe ? '<sup>MoE</sup>' : ''}</b><small>${b.role}</small>${b.unread && S.bot !== k ? `<span class="unr">${b.unread}</span>` : ''}</button>`).join('');
+  const ta = $('#bin'); if (ta) ta.placeholder = `向 ${BOTS[S.bot].name} 提问，或 Steer 正在运行的任务（Enter 发送）`;
+}
+function mHTML(m, i) {
+  const B = BOTS[m.bot || S.bot];
+  switch (m.t) {
+    case 'sys': return `<div class="m-sys">${ic(m.icon || 'bolt', 11)}<div>${m.html}</div><span class="mt">${m.time || ''}</span></div>`;
+    case 'user': return `<div class="m-user"><div class="ubb">${esc(m.text)}</div><div class="um mt">RESEARCHER · ${m.time || ''}</div></div>`;
+    case 'bot': return `<div class="m-bot"><div class="bhh">${ic(B.glyph, 12)}${B.name}<span class="mt">${m.time || ''}</span></div><div class="bb">${m.html}</div></div>`;
+    case 'trace': return `<div class="m-tr ${m.open ? 'open' : ''}"><button class="trh" data-act="trace" data-i="${i}">${ic('chev', 11, 2)}<span class="trk">MCP</span><span class="tn">${m.tool}</span><span class="trm">${fmtMs(m.ms)}</span><span class="trk ok">${m.status}</span></button><div class="trb"><div class="trs">ARGS</div><pre>${json(m.args)}</pre><div class="trs">RESULT</div><pre>${json(m.ret)}</pre></div></div>`;
+    case 'mem': return `<div class="m-mem"><div class="mh">${ic('mem', 12)}Memory Hit [${m.scope}]<em>${m.conf || 'confidence: high'}</em></div>${m.html}</div>`;
+    case 'card': return `<div class="a2ui ${m.done ? 'done' : ''}"><div class="a2h">A2UI v0.9<span class="a2s">surface: ${m.surface}</span>${m.prd ? prd(m.prd) : ''}</div><div class="a2t">${m.title}</div><div class="a2b">${m.body || ''}</div>${m.done ? `<div class="a2d">${ic('check', 12, 2)}${m.done}</div>` : `<div class="a2a">${m.actions.map((a, k) => `<button class="btn sm ${a.kind || ''}" data-act="card" data-i="${i}" data-k="${k}">${a.label}</button>`).join('')}</div>`}</div>`;
+    case 'think': return `<div class="m-think"><i></i><i></i><i></i><span>${m.text}</span></div>`;
+  }
+  return '';
+}
+function renderThread() {
+  const el = $('#thread'); if (!el) return;
+  el.innerHTML = BOTS[S.bot].msgs.map(mHTML).join('');
+  el.scrollTop = el.scrollHeight;
+}
+function renderBot() {
+  $('#bot').innerHTML = `<div class="bhd">
+    <div class="btop">${ic('term', 12)}AGENT HOME · BOT ROOM ${prd('Q7.1')}<span class="sv"><i class="pulse"></i>DAEMON :27070</span></div>
+    <div class="bsub">ppeng-agent-core · room quant-desk · Sparse-MoE top-1 · @ppeng/agent-quant</div>
+    <div class="btabs" id="btabs"></div></div>
+  <div class="ctxbar"><div class="ctxl"><span style="display:flex;gap:5px;align-items:center">CANVAS CONTEXT → USER-TURN ${prd('Q7.2')}</span><span id="ctxTok"></span></div><div class="cchips" id="cchips"></div><div class="kvs">${ic('lock', 10, 2)}KV-Cache Safe: User-Prefix Injection<span>· system v19 指纹不变</span></div></div>
+  <div class="thread" id="thread"></div>
+  <div class="bcmds">${CMDS.map(([k, l, i]) => `<button class="bcmd" data-act="cmd" data-v="${k}">${ic(i, 11)}${l}</button>`).join('')}</div>
+  <div class="binput"><textarea id="bin"></textarea><button class="sendb" data-act="send" title="发送">${ic('send', 14)}</button></div>
+  <div class="bfoot"><span>quant-mcp · ${MCP.length} tools · approvalMode=ask</span><span style="display:flex;gap:5px;align-items:center">${prd('Q7.4')}Routine 3 · 飞书已绑定</span></div>`;
+  LASTCHIPS = []; renderTabs(); renderCtx(); renderThread();
+}
+function rb(b) { if (b === S.bot) renderThread(); else { BOTS[b].unread++; renderTabs(); } }
+function pushMsg(b, m) { m.time = m.time || now(); m.bot = m.bot || b; BOTS[b].msgs.push(m); rb(b); }
+async function say(b, items, think) {
+  const B = BOTS[b]; B.busy = true;
+  const th = { t: 'think', bot: b, text: think || `${B.name} · 规划中 → 调用 Quant MCP` };
+  B.msgs.push(th); rb(b);
+  for (const it of items) {
+    await sleep(it.t === 'trace' ? 520 : 360);
+    it.time = it.time || now(); it.bot = it.bot || b;
+    if (it.t === 'trace') th.text = `${B.name} · 执行 ${it.tool}`;
+    B.msgs.splice(B.msgs.indexOf(th), 0, it);
+    if (b === S.bot) renderThread();
+  }
+  B.msgs.splice(B.msgs.indexOf(th), 1); B.busy = false;
+  if (b === S.bot) renderThread(); else { B.unread++; renderTabs(); }
+}
+function openBot() { if (!S.botOpen) { S.botOpen = true; applyBot(); } }
+
+function sizeCard(b) {
+  const o = optimize(), o2 = optimize(Object.assign({}, S.pf, { size: .3 }));
+  return {
+    t: 'card', bot: b, surface: 'quant.constraint_patch', prd: 'Q7.2',
+    title: `检测到 Size 风格暴露 ${sg(o.post.size)}σ 超出 ±0.5σ 阈值，是否一键调整 cvxpy 市值约束至 ±0.3σ 并重跑组合优化？`,
+    body: `<div class="a2m" title="Size 主动暴露（红）· 红虚线 ±0.5σ 硬边界 · 蓝线 建议约束 +0.3σ"><i class="z"></i><i class="lim" style="left:25%"></i><i class="lim" style="left:75%"></i><i class="new" style="left:65%"></i><b style="left:50%;width:${clamp(o.post.size, 0, 1) * 50}%"></b></div>
+      <div class="a2g"><span>约束项</span><b>当前</b><b>建议</b><span>Size 敞口限制</span><b>±${fx(S.pf.size)}σ</b><b class="to">±0.30σ</b><span>Size 主动暴露</span><b>${sg(o.post.size)}σ</b><b class="to">${sg(o2.post.size)}σ</b><span>预计年化超额</span><b>${fx(o.net, 2)}%</b><b class="to">${fx(o2.net, 2)}%</b><span>其中小盘风格 Beta</span><b>${fx(1.9 * o.post.size, 2)}%</b><b class="to">${fx(1.9 * o2.post.size, 2)}%</b></div>`,
+    actions: [{ label: '应用约束并重跑', kind: 'pri', fn: 'applySize', arg: .3 }, { label: '仅查看暴露', fn: 'goto', arg: { view: 'portfolio' } }, { label: '忽略', fn: 'ignore' }]
+  };
+}
+const gotoCard = (b, title, body, view, extra) => ({ t: 'card', bot: b, surface: 'quant.view_route', title, body, actions: [{ label: '打开 ' + NAVS.find(n => n[0] === view)[2], kind: 'pri', fn: 'goto', arg: Object.assign({ view }, extra || {}) }] });
+
+const FLOWS = {
+  ic(b) {
+    const m = evalFactor(), d = alphaData(), on = PIPE.filter(p => S.pipe[p.k]).map(p => p.short);
+    const out = [trace('quant_eval_factor', 380 + Math.round(Math.random() * 90), { factor: S.factor, universe: S.uni, pit: '2026-11-25T15:00+08:00', pipeline: on, horizon: '1D', quantiles: 10, nw_lags: 5 },
+      { rank_ic: +fx(m.ic, 4), icir_ann: +fx(m.icir), nw_tstat: +fx(m.t), ls_ann_pct: +fx(m.ls, 1), top_excess_pct: +fx(m.top, 1), turnover_1side_pct: +fx(m.to, 1), ic_halflife_d: +fx(m.hl, 1), monotonic_rho: +fx(d.mono), max_corr: { with: m.mcWith, r: +fx(m.mc) }, gate: m.mc < .7 && m.icir >= 1.5 && m.to <= 20 ? 'PASS' : 'WARN' })];
+    if (m.to > 20) out.push({ t: 'mem', scope: 'project.memory', html: `2026-11-18 已证伪「单边换手率 &gt; 45% 的短期反转因子」(EXP-0398，扣费后超额 -2.1%)。当前因子单边换手 ${fx(m.to, 1)}%，已自动附加 λ≥0.8 换手惩罚建议，规避重复假设。` });
+    out.push(botMsg(b, `<b>${S.factor}</b> @${UNI[S.uni].label}：RankIC <b>${fx(m.ic, 4)}</b> · ICIR <b>${fx(m.icir)}</b> · NW t <b>${fx(m.t)}</b>，10 分层单调 ρ=${fx(d.mono)}，IC 半衰期 ${fx(m.hl, 1)}D。${m.mc >= .7 ? `与 <code>${m.mcWith}</code> 相关 ${fx(m.mc)} 超过 0.70，<b>入库前需正交</b>。` : `库内最大相关 ${fx(m.mc)}（${m.mcWith}），冗余可控。`}${!S.pipe.size ? ' 注意：当前关闭了市值中性化，IC 抬升主要来自小盘溢价。' : ''}`));
+    if (S.view !== 'alpha') out.push(gotoCard(b, '在 Alpha 工坊查看完整 Tearsheet？', '10 分层净值、滚动 IC、IC 衰减与相关性矩阵已按当前上下文刷新。', 'alpha'));
+    return out;
+  },
+  cpcv(b) {
+    const e = EXPS.find(x => x.id === S.exp), p = cpcvPaths(e), neg = p.filter(v => v < 0).length, reasons = [];
+    if (e.pbo > .25) reasons.push('PBO>0.25'); if (e.dsr < .95) reasons.push('DSR<0.95'); if (e.oos / e.is < .5) reasons.push('OOS/IS<0.5');
+    return [trace('quant_run_cpcv_gate', 41820, { experiment: e.code, n_groups: 6, k_test: 2, purge: '5D', embargo: '10D', mode: 'bg_run' }, { is_sharpe: e.is, oos_sharpe_median: +fx(median(p)), oos_neg_paths: neg + '/15', pbo: e.pbo, dsr: e.dsr, verdict: e.gate, reasons }, 'OK · bg_run'),
+      botMsg(b, reasons.length ? `<b>${e.code} ${e.name}</b> 未通过硬门禁：${reasons.map(r => `<code>${esc(r)}</code>`).join(' ')}。15 条 CPCV 路径中 ${neg} 条 OOS 夏普为负，IS ${fx(e.is)} → OOS 中位 ${fx(median(p))}，属于典型的搜索选择偏差。` : `<b>${e.code} ${e.name}</b> 通过 CPCV 门禁：PBO ${fx(e.pbo)} · DSR ${fx(e.dsr)} · OOS/IS ${fx(e.oos / e.is)}，15 条路径 OOS 夏普中位 ${fx(median(p))}。`),
+      S.view !== 'models' ? gotoCard(b, `查看 ${e.code} 的 CPCV 路径分布与 Walk-Forward？`, '切换至 /models 并高亮该实验，对照 PROMOTED 的 EXP-0427。', 'models', { exp: e.id }) : null].filter(Boolean);
+  },
+  barra(b) {
+    const o = optimize();
+    const out = [trace('quant_barra_exposure', 186, { universe: S.uni, model: 'CNE6', portfolio: 'target_2026-11-25', benchmark: UNI[S.uni].code }, { active_exposure_sigma: Object.fromEntries(BARRA.map(([k, n]) => [n, +fx(o.post[k])])), hard_limit: .5, breaches: o.breach, te_ann_pct: +fx(o.teExp) })];
+    if (o.breach.length) { out.push(botMsg(b, `组合层：当前 cvxpy 约束下 <b>Size 主动暴露 ${sg(o.post.size)}σ</b>，越过 ±0.5σ 硬风控边界；约 ${fx(1.9 * o.post.size, 1)}%/年超额来自小盘风格 Beta，并非纯 Alpha。`)); out.push(sizeCard(b)); }
+    else out.push(botMsg(b, `CNE6 十项风格暴露全部位于 ±0.5σ 内（最大 ${BARRA.map(([k, n]) => [n, o.post[k]]).sort((x, y) => Math.abs(y[1]) - Math.abs(x[1]))[0].map((v, i) => i ? sg(v) + 'σ' : v).join(' ')}），预期 TE ${fx(o.teExp, 2)}%，无需调整。`));
+    return out;
+  },
+  feishu(b) {
+    const bt = btData(), c = attrib(bt);
+    return [trace('quant_attribution_tearsheet', 920, { universe: S.uni, asof: '2026-11-25', sections: ['nav', 'attribution', 'factor_health', 'risk'] }, { excess_ann_pct: +fx(bt.aE * 100, 2), ir: +fx(bt.ir), pure_alpha_share_pct: +fx(c.alpha / c.E * 100, 1), size_exposure: +fx(bt.o.post.size), degrading: 2, kill_switch: 2 }),
+      { t: 'card', bot: b, surface: 'feishu.push_approval', prd: 'Q7.4', title: '推送「QuantLab 量化日报 · 2026-11-25」至飞书群「量化投研日报」？', body: `<div class="a2g"><span>年化超额 / IR</span><b>${sg(bt.aE * 100, 2)}%</b><b>${fx(bt.ir)}</b><span>纯 Alpha 占比</span><b>${fx(c.alpha / c.E * 100, 1)}%</b><b></b><span>因子告警</span><b class="to">2 DEGRADING</b><b class="to">2 KILL</b><span>Size 暴露</span><b>${sg(bt.o.post.size)}σ</b><b></b></div><div style="margin-top:6px;font-size:10.5px;color:var(--tx3)">approvalMode: ask · 外部副作用需人工确认</div>`, actions: [{ label: '批准推送', kind: 'pri', fn: 'feishuOk' }, { label: '取消', fn: 'ignore' }] }];
+  }
+};
+async function runCmd(k, b, userText) {
+  b = b || S.bot; openBot();
+  if (b !== S.bot) { S.bot = b; BOTS[b].unread = 0; renderTabs(); renderThread(); }
+  const e = EXPS.find(x => x.id === S.exp);
+  const hint = { ic: ` ${S.factor} @${S.uni}`, cpcv: ` ${e.code}`, barra: ` @${S.uni}`, feishu: ' 2026-11-25' }[k];
+  pushMsg(b, { t: 'user', text: userText || ({ ic: '/跑IC与10分层', cpcv: '/CPCV过拟合体检', barra: '/Barra风险诊断', feishu: '/推送飞书日报' }[k] + hint) });
+  await say(b, FLOWS[k](b));
+}
+async function sendText() {
+  const ta = $('#bin'); const t = ta.value.trim(); if (!t) return; ta.value = '';
+  const b = S.bot;
+  if (BOTS[b].busy) { pushMsg(b, { t: 'user', text: t }); pushMsg(b, { t: 'sys', icon: 'route', html: 'Steer 已写入 <code>step-inbox</code>，将在下一次工具调用前注入当前运行' }); return; }
+  if (/barra|风险|暴露|size|市值/i.test(t)) return runCmd('barra', b, t);
+  if (/cpcv|过拟合|pbo|dsr|#42/i.test(t)) return runCmd('cpcv', b, t);
+  if (/飞书|日报|推送/.test(t)) return runCmd('feishu', b, t);
+  if (/换手|反转/.test(t)) { pushMsg(b, { t: 'user', text: t }); return say(b, [{ t: 'mem', scope: 'project.memory', html: '2026-11-18 已证伪类似「单边换手率 &gt; 45% 的短期反转因子」(EXP-0398，扣费后超额 -2.1%)，自动规避重复假设。' }, { t: 'mem', scope: 'user.memory', conf: 'confidence: medium', html: '偏好：日频因子单边换手上限 25%，超过需附带冲击成本敏感性分析。' }, botMsg(b, '结合记忆：高换手反转类假设在扣除平方根冲击与印花税后历史上不显著。建议改为 <b>5D 平滑 + λ≥0.8 换手惩罚</b> 的版本再评估，我可以直接提交给 RD-Agent 沙箱。')]); }
+  if (/ic|因子|分层|alpha/i.test(t)) return runCmd('ic', b, t);
+  pushMsg(b, { t: 'user', text: t });
+  return say(b, [trace('quant_list_experiments', 18, { universe: S.uni, limit: 5, sort: 'oos_sharpe' }, { items: EXPS.map(e => ({ id: e.code, oos_sharpe: e.oos, gate: e.gate })) }),
+    botMsg(b, `已基于画布上下文 <code>${esc(ctxChips().slice(0, 2).join(' · '))}</code> 理解问题。当前 PROMOTED 模型为 <b>EXP-0427 LightGBM</b>（OOS 夏普 2.12），RDA-0042 因 PBO 0.41 被拦截。可用快捷指令继续：IC 评估、CPCV 体检、Barra 诊断或推送日报。`)]);
+}
+const ACTS = {
+  applySize(v, m, b) { m.done = `已应用 Size ±${fx(v)}σ · 已触发重跑 · ${now()}`; renderThread(); applySizeFlow(v, b); },
+  goto(a) { if (a.exp) S.exp = a.exp; setView(a.view); },
+  ignore(a, m) { m.done = '已忽略 · 记录至 session.scratch'; renderThread(); },
+  feishuOk(a, m, b) { m.done = '已批准 · ' + now(); renderThread(); say(b, [trace('feishu_send_card', 640, { chat: 'oc_quant_daily', template: 'quant_daily_v2', asof: '2026-11-25' }, { ok: true, message_id: 'om_x100b4f2c7e91a', delivered: 23 }), { t: 'sys', icon: 'clock', html: 'Routine <code>quant.daily_report</code> 已登记：每交易日 15:30 推送，无异常时 <b>[NO_UPDATE]</b> 静默' }]); },
+  rdSubmit(a, m, b) { m.done = '已提交 RD-Agent 假设 H-0432 · ' + now(); renderThread(); say(b, [trace('quant_submit_factor_hypothesis', 1180, { hypothesis: 'H-0432 低复杂度量价背离（≤6 层算子）', universe: S.uni, sandbox: 'no-network', gate: ['cpcv_pbo<=0.25', 'dsr>=0.95'] }, { job_id: 'bg_rd_0432', mode: 'bg_run', wait_for: 'quant_run_cpcv_gate', eta_min: 6 }, 'OK · bg_run'), { t: 'sys', icon: 'route', html: 'RD-Agent 闭环：假设 → 沙箱执行 → CPCV/DSR 硬门禁 → 教训入 <code>project.memory</code> · wait_for 零 Token 挂起 ' + prd('Q7.3') }]); },
+  diagAct(a, m, b) { m.done = a === 'cut' ? 'PM 审批单已生成 · 权重 -50% 待签核（Authority Gate）' : '继续观察 5D · 已加入 Routine quant.factor_decay_watch'; renderThread(); },
+  factorOk(a, m, b) { m.done = '已批准入库 · ' + now(); renderThread(); say(b, [trace('quant_submit_factor_hypothesis', 960, { factor: S.factor, universe: S.uni, target: 'factor_lib/v2', require: ['cpcv_gate'] }, { job_id: 'bg_fl_0431', mode: 'bg_run', wait_for: 'quant_run_cpcv_gate', eta_min: 6 }, 'OK · bg_run'), { t: 'sys', icon: 'clock', html: 'bg_run 已挂起 · <code>wait_for</code> 零 Token 等待 CPCV 门禁回调后写入因子库' }]); },
+  signOk(a, m, b) { m.done = '已签核导出 · ' + now(); renderThread(); say(b, [trace('quant_export_signal', 120, { file: 'signals/2026-11-25/target_weights.csv', rows: 102 }, { sha256: '8f3a…c41e', broker_routes: 0 }), { t: 'sys', icon: 'lock', html: '仅导出信号文件，未触达任何交易通道 ' + prd('Q6.3') }]); }
+};
+function onCard(i, k) { const b = S.bot, m = BOTS[b].msgs[i]; if (!m || m.done) return; const a = m.actions[k]; ACTS[a.fn](a.arg, m, b); }
+function animPf(k, to, ms) {
+  return new Promise(res => {
+    const from = S.pf[k], t0 = performance.now();
+    const step = t => { const p = Math.min(1, (t - t0) / ms), e = 1 - Math.pow(1 - p, 3); S.pf[k] = from + (to - from) * e; const inp = $(`input[data-pf="${k}"]`); if (inp) { inp.value = S.pf[k]; setRangeP(inp); } updPf(); if (p < 1) requestAnimationFrame(step); else { S.pf[k] = to; updPf(); renderCtx(); res(); } };
+    requestAnimationFrame(step);
+  });
+}
+async function applySizeFlow(v, b) {
+  const before = optimize();
+  if (S.view !== 'portfolio') setView('portfolio');
+  await sleep(260); await animPf('size', v, 760);
+  const after = optimize();
+  await say(b, [trace('quant_optimize_portfolio', 640, { universe: S.uni, solver: 'CLARABEL', objective: 'max_ir', constraints: { w_max: +(S.pf.wmax / 100).toFixed(3), ind_dev: +(S.pf.ind / 100).toFixed(3), te_max: +(S.pf.te / 100).toFixed(3), size_abs: v, turnover_l1: +fx(S.pf.lam) } },
+    { status: 'OPTIMAL', solve_ms: 38, exp_excess_ann_pct: +fx(after.net, 2), te_ann_pct: +fx(after.teExp, 2), size_exposure: +fx(after.post.size), enc: after.enc, turnover_2side_pct: +fx(after.turn * 100, 1), breaches: after.breach }),
+  botMsg(b, `重跑完成：Size 主动暴露 <b>${sg(before.post.size)}σ → ${sg(after.post.size)}σ</b>，回到 ±0.5σ 硬边界内；预计年化超额 ${fx(before.net, 2)}% → ${fx(after.net, 2)}%，让出的 ${fx(before.net - after.net, 2)}% 本质是小盘风格 Beta。约束快照已写入 <code>project.memory</code>。`)], 'cvxpy 重跑中');
+}
+const DIAG = {
+  alpha_mom_resid_60d: '2026-10 以来风格切换至低波红利，动量类出现阶段性崩溃；60D IC 降至历史 18% 分位，与 <code>mom_120d</code> 拥挤度同步上行。判定为 <b>Regime Shift</b>，非数据问题。',
+  alpha_smart_money_vwap: '拥挤度 0.86（同类尾盘量价因子在量化私募中大面积使用），IC 衰减叠加 24% 单边换手放大摩擦，扣费后边际收益趋零。判定为 <b>Alpha 拥挤衰减</b>。',
+  rev_5d_liq_adj: '60D IC 转负，历史 2% 分位，已触发 KILL-SWITCH；与 2026-11-18 证伪的高换手反转因子同族。建议直接下线。',
+  alpha_north_flow_chg_20d: '数据源断档：北向持股明细披露口径调整后由日频降为季频，因子输入失效 —— 属于 <b>数据层（Q1）问题</b>，非 Alpha 衰减。',
+  alpha_earn_sue_pit: '未见衰减：IC 位于历史 71% 分位，拥挤度 0.38，维持当前权重。',
+  alpha_vp_corr_20d: '未见衰减：IC 位于历史 64% 分位，拥挤度 0.45，维持当前权重。'
+};
+async function diag(fid) {
+  openBot();
+  const b = 'miner', row = SHF.find(r => r[0] === fid);
+  S.bot = b; BOTS[b].unread = 0; renderTabs(); renderThread();
+  pushMsg(b, { t: 'user', text: `诊断 ${fid} 失效原因（状态 ${row[4]}）` });
+  pushMsg(b, { t: 'sys', icon: 'route', html: 'Quant-Lead 路由 → <b>Alpha-Miner</b> [MoE · gate 0.83 · top-1]' });
+  const items = [trace('quant_shadow_drift_check', 340, { factor: fid, window: '60D', universe: S.uni }, { rank_ic_60d: +fx(row[1] * UNI[S.uni].ic, 4), hist_pctile: row[2] / 100, crowding: row[3], state: row[4] }),
+    trace('quant_factor_correlation', 286, { factor: fid, against: 'factor_lib/v2', window: '120D' }, { max_corr: { with: fid.includes('mom') ? 'mom_120d' : 'liq_turn_20d', r: fid.includes('smart') ? .74 : .41 }, crowding_trend: row[3] > .5 ? 'rising' : 'flat' })];
+  if (fid === 'rev_5d_liq_adj') items.push({ t: 'mem', scope: 'project.memory', html: '2026-11-18 已证伪类似「单边换手率 &gt; 45% 的短期反转因子」，自动规避重复假设。' });
+  items.push(botMsg(b, `<b>${fid}</b>：${DIAG[fid]}`));
+  if (row[4] !== 'ACTIVE') items.push({ t: 'card', bot: b, surface: 'quant.factor_action', prd: 'Q6.2', title: `${fid} 处置建议`, body: '研究与交易隔离：任何权重调整仅生成审批单，需 PM 签核后才进入下一期目标权重。', actions: [{ label: '降权 50% 并提交审批', kind: 'pri', fn: 'diagAct', arg: 'cut' }, { label: '提交 RD-Agent 替代假设', fn: 'rdSubmit' }, { label: '继续观察 5D', fn: 'diagAct', arg: 'watch' }] });
+  await say(b, items, 'Alpha-Miner · 拉取影子漂移与拥挤度');
+}
+function submitFactor() {
+  openBot(); const b = S.bot, m = evalFactor(), d = alphaData();
+  const fails = []; if (m.mc >= .7) fails.push(`MaxCorr ${fx(m.mc)} ≥ 0.70`); if (m.icir < 1.5) fails.push(`ICIR ${fx(m.icir)} < 1.5`); if (m.to > 20) fails.push(`单边换手 ${fx(m.to, 1)}% > 20%`); if (d.mono < .9) fails.push(`单调 ρ ${fx(d.mono)} < 0.90`);
+  pushMsg(b, { t: 'user', text: `提交 ${S.factor} 入库门禁 @${S.uni}` });
+  say(b, fails.length ? [botMsg(b, `入库预检未通过：${fails.map(f => `<code>${esc(f)}</code>`).join(' ')}。建议先开启 Barra 风格正交或提高换手惩罚后重试。`)]
+    : [{ t: 'card', bot: b, surface: 'quant.approval', prd: 'Q7.3', title: `批准 ${S.factor} 进入 CPCV 入库门禁？`, body: `<div class="a2g"><span>RankIC / ICIR</span><b>${fx(m.ic, 4)}</b><b>${fx(m.icir)}</b><span>MaxCorr</span><b>${fx(m.mc)}</b><b>${m.mcWith}</b><span>单边换手</span><b>${fx(m.to, 1)}%</b><b></b></div><div style="margin-top:6px;font-size:10.5px;color:var(--tx3)">quant_submit_factor_hypothesis · approvalMode=ask · bg_run</div>`, actions: [{ label: '批准入库', kind: 'pri', fn: 'factorOk' }, { label: '取消', fn: 'ignore' }] }]);
+}
+function exportSignal() {
+  openBot(); const b = S.bot;
+  pushMsg(b, { t: 'user', text: '导出今日调仓清单 target_weights.csv' });
+  say(b, [{ t: 'card', bot: b, surface: 'quant.approval', prd: 'Q6.3', title: '导出 2026-11-25 调仓清单（102 只 · 37 笔草单）需 PM 签核', body: '仅导出信号文件与风控审阅报告；QuantLab 不持有任何券商下单凭据，不会直连实盘。', actions: [{ label: 'PM 签核并导出', kind: 'pri', fn: 'signOk' }, { label: '取消', fn: 'ignore' }] }], 'Risk 审阅生成中');
+}
+function seedThreads() {
+  const m = evalFactor('alpha_vp_corr_20d', ALLON, 'CSI500'), d = alphaData(), o = optimize();
+  BOTS.lead.msgs = [
+    { t: 'sys', icon: 'clock', time: '09:05:00', html: 'Routine <code>quant.premarket_health</code> 完成 · 数据 12/12 · <b>[NO_UPDATE]</b> 静默，未打扰飞书' },
+    { t: 'sys', icon: 'bolt', time: '15:05:12', html: 'Routine <code>quant.factor_decay_watch</code> 唤醒：2 DEGRADING · 2 KILL-SWITCH → 已推送飞书告警' },
+    { t: 'user', time: '15:06:40', text: '评估 alpha_vp_corr_20d 能否入库，并检查当前目标组合的风格风险。' },
+    { t: 'mem', scope: 'project.memory', time: '15:06:41', html: '2026-11-18 已证伪类似「单边换手率 &gt; 45% 的短期反转因子」(EXP-0398，扣费后超额 -2.1%)，自动规避重复假设；本因子单边换手 18.6%，不触发。' },
+    Object.assign(trace('quant_eval_factor', 412, { factor: 'alpha_vp_corr_20d', universe: 'CSI500', pit: '2026-11-25T15:00+08:00', pipeline: ['MAD', 'IND', 'SIZE', 'BARRA', 'ST'], horizon: '1D', quantiles: 10, nw_lags: 5 }, { rank_ic: +fx(m.ic, 4), icir_ann: +fx(m.icir), nw_tstat: +fx(m.t), ls_ann_pct: +fx(m.ls, 1), turnover_1side_pct: +fx(m.to, 1), monotonic_rho: +fx(d.mono), max_corr: { with: m.mcWith, r: +fx(m.mc) }, gate: 'PASS' }), { time: '15:06:42' }),
+    Object.assign(trace('quant_barra_exposure', 186, { universe: 'CSI500', model: 'CNE6', portfolio: 'target_2026-11-25' }, { active_exposure_sigma: { Size: +fx(o.post.size), NonlinearSize: +fx(o.post.nls), ResidualVol: +fx(o.post.rvol), Liquidity: +fx(o.post.liq) }, hard_limit: .5, breaches: o.breach }), { time: '15:06:43' }),
+    { t: 'bot', bot: 'lead', time: '15:06:47', html: `因子层：RankIC <b>${fx(m.ic, 4)}</b> · ICIR <b>${fx(m.icir)}</b> · NW t <b>${fx(m.t)}</b>，10 分层单调 ρ=${fx(d.mono)}，与 <code>${m.mcWith}</code> 相关 ${fx(m.mc)} &lt; 0.70，满足入库门禁。<br>组合层：当前 cvxpy 约束下 <b>Size 主动暴露 ${sg(o.post.size)}σ</b>，越过 ±0.5σ 硬风控边界，约 ${fx(1.9 * o.post.size, 1)}%/年超额来自小盘风格 Beta，并非纯 Alpha。` },
+    Object.assign(sizeCard('lead'), { time: '15:06:47' })
+  ];
+  const e = EXPS[4], p = cpcvPaths(e);
+  BOTS.miner.msgs = [
+    { t: 'sys', icon: 'route', time: '14:41:03', html: 'Room <code>quant-desk</code> · Sparse-MoE 路由 Quant-Lead → <b>Alpha-Miner</b>（gate 0.83 · top-1）' },
+    { t: 'user', time: '14:41:20', text: 'RD-Agent 候选 #42 的 IS 夏普有 3.4，为什么被拦了？' },
+    Object.assign(trace('quant_run_cpcv_gate', 41820, { experiment: 'RDA-0042', n_groups: 6, k_test: 2, purge: '5D', embargo: '10D', mode: 'bg_run' }, { is_sharpe: e.is, oos_sharpe_median: +fx(median(p)), oos_neg_paths: p.filter(v => v < 0).length + '/15', pbo: e.pbo, dsr: e.dsr, verdict: 'REJECTED', reasons: ['PBO>0.25', 'DSR<0.95', 'OOS/IS<0.5'] }, 'OK · bg_run'), { time: '14:42:05' }),
+    { t: 'mem', scope: 'project.memory', time: '14:42:06', conf: 'write · L-0042', html: '写入失败教训：「LLM 生成的 &gt;12 层嵌套算子在 2024-02 流动性冲击后失效」→ 后续 RD-Agent 假设自动施加算子复杂度惩罚。' },
+    { t: 'bot', bot: 'miner', time: '14:42:09', html: `#42 的 IS 夏普 3.42 来自 17 层嵌套算子上的反复搜索，是<b>选择偏差</b>：15 条 CPCV 路径中 ${p.filter(v => v < 0).length} 条 OOS 夏普为负，PBO <b>0.41</b>（阈值 0.25），Deflated Sharpe 仅 <b>0.58</b>。结论：过拟合，硬门禁拦截正确。` },
+    { t: 'card', bot: 'miner', time: '14:42:09', surface: 'quant.view_route', prd: 'Q7.3', title: '查看 #42 的 CPCV 路径分布与 Walk-Forward 表现？', body: '切换至 /models 并选中 RDA-0042，对照 PROMOTED 的 EXP-0427。', actions: [{ label: '打开 CPCV 分布', kind: 'pri', fn: 'goto', arg: { view: 'models', exp: 'rd42' } }, { label: '提交降复杂度新假设', fn: 'rdSubmit' }] }
+  ];
+  const bt = btData(), c = attrib(bt);
+  BOTS.risk.msgs = [
+    { t: 'user', time: '14:12:09', text: '这三年的超额里，有多少是真 Alpha？' },
+    Object.assign(trace('quant_attribution_tearsheet', 920, { universe: 'CSI500', period: '2024-01-02/2026-11-25', model: 'Brinson + CNE6' }, { excess_ann_pct: +fx(c.E, 2), pure_alpha_pct: +fx(c.alpha, 2), style_beta_pct: +fx(c.style, 2), industry_pct: +fx(c.ind, 2), pure_alpha_share_pct: +fx(c.alpha / c.E * 100, 1) }), { time: '14:12:11' }),
+    { t: 'bot', bot: 'risk', time: '14:12:14', html: `年化超额 <b>${fx(c.E, 2)}%</b> 中，纯选股残差 Alpha 约 <b>${fx(c.alpha, 2)}%</b>（占 ${fx(c.alpha / c.E * 100, 0)}%）；风格 Beta ${fx(c.style, 2)}%，其中 Size 贡献最大（${fx(c.size, 2)}%）。收紧 Size 约束后 Alpha 占比会进一步提升。` },
+    { t: 'card', bot: 'risk', time: '14:12:14', surface: 'quant.view_route', title: '打开 Brinson + Barra 归因明细？', body: '包含分年度拆解、微结构摩擦瀑布图与撮合失败审计。', actions: [{ label: '打开 /backtest', kind: 'pri', fn: 'goto', arg: { view: 'backtest' } }] }
+  ];
+  Object.keys(BOTS).forEach(k => BOTS[k].msgs.forEach(x => { x.bot = x.bot || k; }));
+}
+
+/* =====================================================================
+ * 渲染与事件
+ * ===================================================================== */
+function drawView() { SYNC = {}; untip(); if (DRAW[S.view]) DRAW[S.view](); }
+function renderMain() { const el = $('#main'); el.innerHTML = V[S.view](); drawView(); }
+function syncURL() { try { const q = new URLSearchParams(location.search); q.set('view', S.view); q.set('theme', S.theme); if (S.prd) q.set('prd', '1'); else q.delete('prd'); history.replaceState(null, '', location.pathname + '?' + q.toString()); } catch (err) { /* file:// 下部分浏览器禁止改写 URL */ } }
+function setView(v) { S.view = v; renderNav(); renderMain(); renderCtx(); syncURL(); $('#main').scrollTop = 0; }
+function setTheme(v) { S.theme = v; document.documentElement.dataset.theme = v; $$('#themeSeg button').forEach(b => b.classList.toggle('on', b.dataset.v === v)); drawView(); syncURL(); }
+function applyPrd() { document.body.classList.toggle('prd-on', S.prd); $('#prdBtn').classList.toggle('on', S.prd); syncURL(); }
+function applyBot() { document.body.classList.toggle('bot-off', !S.botOpen); $('#botBtn').classList.toggle('on', S.botOpen); drawView(); }
+function onUni() {
+  const u = UNI[S.uni]; $('#uniMeta .v').textContent = `${u.code} · N=${thou(u.n)}`;
+  renderMain(); renderCtx();
+  pushMsg(S.bot, { t: 'sys', icon: 'sync', html: `画布上下文变更 <code>universe:${S.uni}</code> → 注入下一轮 user-turn 前缀，system 不变，KV Cache 命中保持` });
+}
+document.addEventListener('click', e => {
+  const t = e.target.closest('[data-act]'); if (!t) return;
+  const a = t.dataset.act, v = t.dataset.v;
+  switch (a) {
+    case 'view': setView(v); break;
+    case 'factor': S.factor = v; renderMain(); renderCtx(); break;
+    case 'pipe': S.pipe[v] = !S.pipe[v]; renderMain(); renderCtx(); break;
+    case 'alt': S.alphaAlt = v; renderMain(); break;
+    case 'exp': S.exp = v; if (S.view !== 'models') setView('models'); else { renderNav(); renderMain(); renderCtx(); } break;
+    case 'engine': S.engine = v; renderMain(); renderCtx(); break;
+    case 'obj': S.obj = v; renderMain(); break;
+    case 'theme': setTheme(v); break;
+    case 'prd': S.prd = !S.prd; applyPrd(); break;
+    case 'botToggle': S.botOpen = !S.botOpen; applyBot(); break;
+    case 'bot': S.bot = v; BOTS[v].unread = 0; renderTabs(); renderThread(); break;
+    case 'cmd': runCmd(v); break;
+    case 'card': onCard(+t.dataset.i, +t.dataset.k); break;
+    case 'trace': { const m = BOTS[S.bot].msgs[+t.dataset.i]; if (m) { m.open = !m.open; t.closest('.m-tr').classList.toggle('open', m.open); } break; }
+    case 'send': sendText(); break;
+    case 'applySize': applySizeFlow(+v, S.bot); openBot(); break;
+    case 'pfReset': S.pf = Object.assign({}, PF0); S.obj = 'ir'; renderMain(); renderCtx(); break;
+    case 'diag': diag(v); break;
+    case 'submitFactor': submitFactor(); break;
+    case 'exportSignal': exportSignal(); break;
+    case 'dqRun': openBot(); pushMsg(S.bot, { t: 'user', text: '立即重跑数据质量审计' }); say(S.bot, [trace('quant_data_health', 96, { scope: 'all', checks: ['survivorship', 'pit_restatement', 'adj_anchor', 'nan_not_zero', 'constituents_pit', 'lookahead_scan'] }, { passed: 6, failed: 0, warn_datasets: ['两融明细 T-1', '一致预期 覆盖 96.2%'], duration_s: 252 }), botMsg(S.bot, '6 项零偏差审计全部 <b>PASS</b>；两融明细为交易所 T-1 披露属预期滞后，一致预期覆盖率 96.2% 已触发备源 Wind 补齐任务。')]); break;
+  }
+});
+document.addEventListener('input', e => { const t = e.target; if (t.dataset && t.dataset.pf) { S.pf[t.dataset.pf] = +t.value; setRangeP(t); updPf(); renderCtx(); } });
+document.addEventListener('keydown', e => { if (e.target.id === 'bin' && e.key === 'Enter' && !e.shiftKey && !e.isComposing) { e.preventDefault(); sendText(); } });
+let CUR_TIP = null;
+document.addEventListener('mouseover', e => { const t = e.target.closest && e.target.closest('[data-tip]'); CUR_TIP = t && t.getAttribute('data-tip') ? t : null; if (!CUR_TIP && !(e.target.classList && e.target.classList.contains('ov'))) untip(); });
+document.addEventListener('mousemove', e => { if (CUR_TIP) tip(CUR_TIP.getAttribute('data-tip'), e); });
+let RZ; window.addEventListener('resize', () => { clearTimeout(RZ); RZ = setTimeout(drawView, 120); });
+
+function init() {
+  tipEl = $('#tip');
+  document.documentElement.dataset.theme = S.theme;
+  $$('#themeSeg button').forEach(b => b.classList.toggle('on', b.dataset.v === S.theme));
+  document.body.classList.toggle('bot-off', !S.botOpen); $('#botBtn').classList.toggle('on', S.botOpen);
+  $('#uniSel').value = S.uni;
+  $('#uniSel').addEventListener('change', e => { S.uni = e.target.value; onUni(); });
+  seedThreads(); renderNav(); renderBot(); applyPrd(); renderMain();
+  setInterval(() => { const el = $('#hb'); if (el) el.title = 'Agent Home Daemon 心跳 · rtt ' + (9 + Math.round(Math.random() * 8)) + 'ms · queue 0'; }, 2200);
+}
+init();
+</script>
+</body>
+</html>

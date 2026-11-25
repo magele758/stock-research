@@ -1,0 +1,47 @@
+[build-system]
+requires = ["hatchling"]
+build-backend = "hatchling.build"
+
+[project]
+name = "quant-core"
+version = "0.2.0"
+description = "Pro-Quant V2.0 deterministic quantitative research engine, PIT data lake, Barra CNE6 risk, cvxpy optimizer, A-share microstructure backtest & attribution."
+requires-python = ">=3.11"
+dependencies = [
+    "duckdb>=1.1.0",
+    "polars>=1.10.0",
+    "pyarrow>=17.0.0",
+    "numpy>=1.26.0",
+    "scipy>=1.13.0",
+    "statsmodels>=0.14.0",
+    "scikit-learn>=1.5.0",
+    "cvxpy>=1.5.0",
+    "clarabel>=0.9.0",
+    "osqp>=0.6.7",
+    "pydantic>=2.9.0",
+    "pydantic-settings>=2.5.0",
+    "pandera>=0.20.0",
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.32.0",
+    "httpx>=0.27.0",
+    "mcp>=1.2.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.3.0",
+    "pytest-asyncio>=0.24.0",
+    "ruff>=0.7.0",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/quant_core"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests", "../../services/quant-api/tests", "../../services/quant-mcp/tests"]
+pythonpath = ["src", "../../services/quant-api/src", "../../services/quant-mcp/src"]
+asyncio_mode = "auto"
+
+[tool.ruff]
+line-length = 110
+target-version = "py312"

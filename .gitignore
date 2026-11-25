@@ -1,0 +1,35 @@
+# OS & Editor
+.DS_Store
+.vscode/
+.idea/
+
+# Python
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+*.egg-info/
+.pytest_cache/
+.ruff_cache/
+
+# Node / Next.js
+node_modules/
+apps/web/.next/
+apps/web/out/
+*.tsbuildinfo
+dist/
+build/
+
+# Runtime Data & Secrets
+.env
+.env.local
+*.local
+data/quant-lake/
+data/state/
+*.db
+*.db-wal
+*.db-shm
+
+# Logs
+*.log
+.hflow/

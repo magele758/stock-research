@@ -1,0 +1,2005 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AlphaDesk · AI-Native 股票投研工作台 · 初版设计稿 V0.1</title>
+  <style>
+    :root {
+      --bg-canvas: #F7F6F3;
+      --bg-surface: #FFFFFF;
+      --bg-subtle: #F2F1ED;
+      --bg-hover: #EFECE6;
+      --border: #E6E4DE;
+      --border-strong: #D4D1C9;
+      --text-primary: #171715;
+      --text-secondary: #5B5A55;
+      --text-muted: #8C8982;
+      --accent-ink: #171715;
+      --accent-ink-fg: #FFFFFF;
+
+      /* Semantic Muted Pastels (A-Share: Red Up / Green Down) */
+      --red-bg: #FDEBEC;
+      --red-fg: #A62624;
+      --red-border: #F5CDCF;
+      --green-bg: #EDF4EE;
+      --green-fg: #266032;
+      --green-border: #CCE2CF;
+      --amber-bg: #FBF4DC;
+      --amber-fg: #8C5C00;
+      --amber-border: #EFE0AE;
+      --blue-bg: #E6F2FC;
+      --blue-fg: #1A5C8F;
+      --blue-border: #C3DFF6;
+      --highlight-bg: #FFF1A8;
+      --highlight-border: #D9A400;
+
+      --font-sans: 'SF Pro Display', 'PingFang SC', 'Hiragino Sans GB', 'Helvetica Neue', -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-serif: 'Newsreader', 'Songti SC', 'STSong', Georgia, serif;
+      --font-mono: 'SF Mono', 'JetBrains Mono', 'Menlo', ui-monospace, monospace;
+      --radius-sm: 5px;
+      --radius-md: 8px;
+      --shadow-subtle: 0 1px 2px rgba(23, 23, 21, 0.03);
+    }
+
+    [data-theme="dark"] {
+      --bg-canvas: #121314;
+      --bg-surface: #181A1C;
+      --bg-subtle: #1F2225;
+      --bg-hover: #262A2E;
+      --border: #2A2E33;
+      --border-strong: #3A4047;
+      --text-primary: #ECECE9;
+      --text-secondary: #A6A8AD;
+      --text-muted: #70747B;
+      --accent-ink: #ECECE9;
+      --accent-ink-fg: #121314;
+
+      --red-bg: rgba(217, 75, 72, 0.14);
+      --red-fg: #F28B88;
+      --red-border: rgba(217, 75, 72, 0.30);
+      --green-bg: rgba(65, 168, 95, 0.14);
+      --green-fg: #7DD394;
+      --green-border: rgba(65, 168, 95, 0.28);
+      --amber-bg: rgba(224, 165, 44, 0.15);
+      --amber-fg: #F2C76E;
+      --amber-border: rgba(224, 165, 44, 0.30);
+      --blue-bg: rgba(74, 158, 224, 0.15);
+      --blue-fg: #82C3F7;
+      --blue-border: rgba(74, 158, 224, 0.30);
+      --highlight-bg: rgba(238, 198, 67, 0.28);
+      --highlight-border: #E8C03A;
+    }
+
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; overflow: hidden; }
+    body {
+      font-family: var(--font-sans);
+      background: var(--bg-canvas);
+      color: var(--text-primary);
+      font-size: 13px;
+      line-height: 1.55;
+      -webkit-font-smoothing: antialiased;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .mono { font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+    .serif { font-family: var(--font-serif); letter-spacing: -0.02em; }
+
+    /* Top Chrome Bar */
+    .topbar {
+      height: 46px;
+      background: var(--bg-surface);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 14px;
+      flex-shrink: 0;
+      gap: 12px;
+      z-index: 20;
+    }
+    .brand-group { display: flex; align-items: center; gap: 10px; min-width: 196px; }
+    .win-dots { display: flex; gap: 6px; margin-right: 4px; }
+    .win-dots span { width: 9px; height: 9px; border-radius: 50%; background: var(--border-strong); display: block; }
+    .brand-mark {
+      width: 22px; height: 22px; border-radius: 5px;
+      background: var(--accent-ink); color: var(--accent-ink-fg);
+      display: grid; place-items: center; font-weight: 700; font-size: 11px;
+      font-family: var(--font-mono);
+    }
+    .brand-name { font-weight: 600; font-size: 13.5px; letter-spacing: -0.01em; }
+    .brand-tag {
+      font-size: 10px; font-family: var(--font-mono); letter-spacing: 0.04em;
+      padding: 1px 6px; border-radius: 4px; background: var(--bg-subtle);
+      color: var(--text-secondary); border: 1px solid var(--border);
+    }
+
+    .search-trigger {
+      flex: 1; max-width: 440px; height: 30px;
+      background: var(--bg-subtle); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); padding: 0 10px;
+      display: flex; align-items: center; justify-content: space-between;
+      color: var(--text-muted); cursor: pointer; transition: border-color 150ms, background 150ms;
+    }
+    .search-trigger:hover { border-color: var(--border-strong); background: var(--bg-surface); }
+    .search-trigger-left { display: flex; align-items: center; gap: 8px; font-size: 12.5px; }
+    kbd {
+      font-family: var(--font-mono); font-size: 10.5px; padding: 1px 5px;
+      border-radius: 4px; border: 1px solid var(--border);
+      background: var(--bg-surface); color: var(--text-secondary);
+    }
+
+    .topbar-actions { display: flex; align-items: center; gap: 8px; }
+    .snapshot-pill {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-family: var(--font-mono); font-size: 11px; color: var(--text-secondary);
+      padding: 4px 8px; border-radius: var(--radius-sm);
+      background: var(--bg-subtle); border: 1px solid var(--border);
+    }
+    .live-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--green-fg); }
+
+    .btn {
+      height: 28px; padding: 0 10px; border-radius: var(--radius-sm);
+      border: 1px solid var(--border); background: var(--bg-surface);
+      color: var(--text-primary); font-size: 12px; font-weight: 500;
+      display: inline-flex; align-items: center; gap: 5px; cursor: pointer;
+      transition: background 140ms, border-color 140ms, transform 100ms;
+      white-space: nowrap;
+    }
+    .btn:hover { background: var(--bg-hover); border-color: var(--border-strong); }
+    .btn:active { transform: scale(0.98); }
+    .btn-primary {
+      background: var(--accent-ink); color: var(--accent-ink-fg); border-color: var(--accent-ink);
+    }
+    .btn-primary:hover { opacity: 0.9; background: var(--accent-ink); border-color: var(--accent-ink); }
+    .btn.active-toggle {
+      background: var(--blue-bg); color: var(--blue-fg); border-color: var(--blue-border);
+    }
+
+    /* Main 3-Column App Shell */
+    .app-shell {
+      flex: 1; display: grid; grid-template-columns: 212px 1fr 376px;
+      min-height: 0; overflow: hidden;
+    }
+    .app-shell.right-collapsed { grid-template-columns: 212px 1fr 0px; }
+
+    /* Left Navigation Rail */
+    .left-rail {
+      background: var(--bg-surface); border-right: 1px solid var(--border);
+      display: flex; flex-direction: column; padding: 12px 10px; gap: 16px;
+      overflow-y: auto;
+    }
+    .rail-section-title {
+      font-size: 10.5px; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.06em; color: var(--text-muted); padding: 0 8px 6px;
+    }
+    .nav-item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 7px 8px; border-radius: var(--radius-sm); cursor: pointer;
+      color: var(--text-secondary); font-weight: 500; font-size: 12.5px;
+      transition: background 140ms, color 140ms; margin-bottom: 2px;
+      border: 1px solid transparent;
+    }
+    .nav-item:hover { background: var(--bg-subtle); color: var(--text-primary); }
+    .nav-item.active {
+      background: var(--bg-subtle); color: var(--text-primary);
+      border-color: var(--border); font-weight: 600;
+    }
+    .nav-item-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .nav-item-left span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .nav-badge {
+      font-family: var(--font-mono); font-size: 10px; padding: 0 5px;
+      border-radius: 999px; background: var(--red-bg); color: var(--red-fg);
+      border: 1px solid var(--red-border);
+    }
+    .nav-stage {
+      font-family: var(--font-mono); font-size: 9.5px; color: var(--text-muted);
+    }
+
+    .watchlist-item {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 6px 8px; border-radius: var(--radius-sm); cursor: pointer;
+      transition: background 130ms; margin-bottom: 2px; border: 1px solid transparent;
+    }
+    .watchlist-item:hover { background: var(--bg-subtle); }
+    .watchlist-item.active { background: var(--bg-subtle); border-color: var(--border); }
+    .wl-name { font-size: 12.5px; font-weight: 500; color: var(--text-primary); display: flex; align-items: center; gap: 5px; }
+    .wl-code { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-muted); }
+    .wl-right { text-align: right; }
+    .wl-price { font-family: var(--font-mono); font-size: 12px; font-weight: 600; }
+    .wl-chg { font-family: var(--font-mono); font-size: 10.5px; }
+    .up { color: var(--red-fg); }
+    .down { color: var(--green-fg); }
+
+    .status-dot { width: 6px; height: 6px; border-radius: 50%; display: inline-block; flex-shrink: 0; }
+    .dot-green { background: var(--green-fg); }
+    .dot-amber { background: var(--amber-fg); }
+    .dot-red { background: var(--red-fg); }
+
+    /* Center Workspace Scroll Area */
+    .main-stage {
+      overflow-y: auto; padding: 20px 24px 36px; position: relative;
+      background: var(--bg-canvas);
+    }
+    .stage-inner { max-width: 1120px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
+    .view-panel { display: none; flex-direction: column; gap: 16px; }
+    .view-panel.active { display: flex; }
+
+    /* Cards & Grids */
+    .card {
+      background: var(--bg-surface); border: 1px solid var(--border);
+      border-radius: var(--radius-md); padding: 16px 18px; position: relative;
+      box-shadow: var(--shadow-subtle);
+    }
+    .card-header {
+      display: flex; align-items: center; justify-content: space-between;
+      margin-bottom: 12px; gap: 12px; flex-wrap: wrap;
+    }
+    .card-title { font-size: 13px; font-weight: 600; color: var(--text-primary); display: flex; align-items: center; gap: 8px; }
+    .card-subtitle { font-size: 11.5px; color: var(--text-muted); }
+
+    /* PRD Annotation Badges (Hidden unless body.show-prd) */
+    .prd-tag {
+      display: none; position: absolute; top: -9px; right: 12px;
+      font-family: var(--font-mono); font-size: 10px; font-weight: 600;
+      padding: 1px 7px; border-radius: 4px; z-index: 10;
+      background: var(--blue-fg); color: #FFFFFF; letter-spacing: 0.03em;
+      pointer-events: none;
+    }
+    body.show-prd .prd-tag { display: inline-block; }
+    body.show-prd .card, body.show-prd .annotated { outline: 1px dashed var(--blue-border); outline-offset: -1px; }
+
+    /* Pills & Badges */
+    .pill {
+      display: inline-flex; align-items: center; gap: 4px;
+      padding: 2px 8px; border-radius: 999px; font-size: 11px; font-weight: 500;
+      border: 1px solid transparent; line-height: 1.4;
+    }
+    .pill-green { background: var(--green-bg); color: var(--green-fg); border-color: var(--green-border); }
+    .pill-red { background: var(--red-bg); color: var(--red-fg); border-color: var(--red-border); }
+    .pill-amber { background: var(--amber-bg); color: var(--amber-fg); border-color: var(--amber-border); }
+    .pill-blue { background: var(--blue-bg); color: var(--blue-fg); border-color: var(--blue-border); }
+    .pill-neutral { background: var(--bg-subtle); color: var(--text-secondary); border-color: var(--border); }
+
+    /* Segmented Controls */
+    .segmented {
+      display: inline-flex; background: var(--bg-subtle); padding: 2px;
+      border-radius: var(--radius-sm); border: 1px solid var(--border);
+    }
+    .seg-btn {
+      border: none; background: transparent; color: var(--text-secondary);
+      font-size: 11.5px; font-weight: 500; padding: 3px 9px; border-radius: 4px;
+      cursor: pointer; transition: background 120ms, color 120ms;
+    }
+    .seg-btn.active {
+      background: var(--bg-surface); color: var(--text-primary);
+      box-shadow: 0 1px 2px rgba(0,0,0,0.06); font-weight: 600;
+    }
+
+    /* Stock Header */
+    .asset-header {
+      display: flex; align-items: flex-end; justify-content: space-between;
+      gap: 16px; flex-wrap: wrap; padding-bottom: 14px;
+      border-bottom: 1px solid var(--border);
+    }
+    .asset-title-row { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+    .asset-name { font-size: 24px; font-weight: 600; letter-spacing: -0.025em; line-height: 1.15; }
+    .asset-ticker { font-family: var(--font-mono); font-size: 14px; color: var(--text-secondary); }
+    .asset-meta { display: flex; align-items: center; gap: 8px; margin-top: 6px; flex-wrap: wrap; }
+    .price-block { text-align: right; }
+    .price-main { font-family: var(--font-mono); font-size: 26px; font-weight: 600; letter-spacing: -0.03em; line-height: 1.1; }
+    .price-sub { font-family: var(--font-mono); font-size: 12.5px; margin-top: 4px; display: flex; align-items: center; justify-content: flex-end; gap: 8px; }
+
+    /* Red-Flag Strip (New 9-Article Rules) */
+    .guard-grid { display: grid; grid-template-columns: repeat(6, 1fr); gap: 8px; }
+    .guard-item {
+      padding: 10px 11px; border-radius: var(--radius-sm);
+      border: 1px solid var(--border); background: var(--bg-subtle);
+      cursor: pointer; transition: border-color 140ms, background 140ms;
+    }
+    .guard-item:hover { border-color: var(--border-strong); background: var(--bg-surface); }
+    .guard-item.selected { border-color: var(--blue-fg); background: var(--bg-surface); }
+    .guard-top { display: flex; align-items: center; justify-content: space-between; margin-bottom: 4px; }
+    .guard-label { font-size: 11px; color: var(--text-secondary); font-weight: 500; }
+    .guard-val { font-family: var(--font-mono); font-size: 12.5px; font-weight: 600; color: var(--text-primary); }
+    .guard-note { font-size: 10.5px; color: var(--text-muted); margin-top: 2px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+    .guard-detail-bar {
+      margin-top: 10px; padding: 9px 12px; border-radius: var(--radius-sm);
+      background: var(--bg-subtle); border: 1px solid var(--border);
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      font-size: 12px; color: var(--text-secondary);
+    }
+
+    /* Two-column Bento for Chart & KPI */
+    .bento-2 { display: grid; grid-template-columns: 1.28fr 1fr; gap: 16px; }
+    .guard-label { font-size: 11px; color: var(--text-secondary); font-weight: 500; white-space: nowrap; }
+    .kpi-compact td, .kpi-compact th { padding: 7px 7px !important; font-size: 12px; white-space: nowrap; }
+    .chart-canvas { width: 100%; height: 248px; display: block; }
+    .chart-legend { display: flex; align-items: center; gap: 14px; font-size: 11px; color: var(--text-muted); margin-top: 8px; flex-wrap: wrap; }
+    .legend-item { display: inline-flex; align-items: center; gap: 5px; }
+    .legend-swatch { width: 10px; height: 2px; display: inline-block; }
+
+    /* Tables */
+    table.data-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+    table.data-table th {
+      text-align: left; font-size: 11px; font-weight: 600; color: var(--text-muted);
+      padding: 8px 10px; border-bottom: 1px solid var(--border); white-space: nowrap;
+      background: var(--bg-subtle);
+    }
+    table.data-table td {
+      padding: 9px 10px; border-bottom: 1px solid var(--border);
+      vertical-align: top; color: var(--text-primary);
+    }
+    table.data-table tr:last-child td { border-bottom: none; }
+    table.data-table tbody tr.clickable { cursor: pointer; transition: background 120ms; }
+    table.data-table tbody tr.clickable:hover { background: var(--bg-subtle); }
+    .num { text-align: right !important; font-family: var(--font-mono); font-variant-numeric: tabular-nums; }
+    .restated-cell { background: var(--amber-bg); color: var(--amber-fg) !important; font-weight: 600; }
+
+    /* Inline Citation Button */
+    .cite-btn {
+      display: inline-flex; align-items: center; justify-content: center;
+      font-family: var(--font-mono); font-size: 10px; font-weight: 600;
+      min-width: 18px; height: 16px; padding: 0 4px; margin-left: 3px;
+      border-radius: 3px; background: var(--blue-bg); color: var(--blue-fg);
+      border: 1px solid var(--blue-border); cursor: pointer; vertical-align: middle;
+      transition: background 120ms, color 120ms;
+    }
+    .cite-btn:hover { background: var(--blue-fg); color: #FFFFFF; border-color: var(--blue-fg); }
+
+    /* Filing Feed */
+    .feed-item {
+      display: flex; align-items: flex-start; justify-content: space-between;
+      gap: 12px; padding: 10px 0; border-bottom: 1px solid var(--border);
+    }
+    .feed-item:last-child { border-bottom: none; padding-bottom: 0; }
+    .feed-item:first-child { padding-top: 0; }
+    .feed-title { font-size: 12.5px; font-weight: 500; color: var(--text-primary); margin-bottom: 3px; }
+    .feed-meta { font-size: 11px; color: var(--text-muted); display: flex; align-items: center; gap: 8px; }
+
+    /* Command Center Specific */
+    .proxy-strip { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+    .proxy-card {
+      padding: 11px 13px; border-radius: var(--radius-sm);
+      border: 1px solid var(--border); background: var(--bg-subtle);
+    }
+    .proxy-label { font-size: 11px; color: var(--text-muted); }
+    .proxy-val { font-family: var(--font-mono); font-size: 15px; font-weight: 600; margin: 3px 0 2px; }
+    .brief-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .alert-card {
+      padding: 12px 14px; border-radius: var(--radius-sm);
+      border: 1px solid var(--border); background: var(--bg-surface);
+      display: flex; flex-direction: column; gap: 6px;
+    }
+    .alert-card.severity-red { border-left: 3px solid var(--red-fg); }
+    .alert-card.severity-amber { border-left: 3px solid var(--amber-fg); }
+    .alert-card.severity-blue { border-left: 3px solid var(--blue-fg); }
+
+    /* Deep Research & Bull/Bear */
+    .pipeline-bar { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; }
+    .pipe-step {
+      padding: 9px 11px; border-radius: var(--radius-sm);
+      border: 1px solid var(--border); background: var(--bg-subtle);
+    }
+    .pipe-name { font-size: 11.5px; font-weight: 600; display: flex; align-items: center; justify-content: space-between; }
+    .pipe-meta { font-family: var(--font-mono); font-size: 10.5px; color: var(--text-muted); margin-top: 3px; }
+    .debate-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .debate-col {
+      padding: 14px 16px; border-radius: var(--radius-md);
+      border: 1px solid var(--border); background: var(--bg-surface);
+    }
+    .debate-col.bull { border-top: 2px solid var(--red-fg); }
+    .debate-col.bear { border-top: 2px solid var(--green-fg); }
+    .debate-list { list-style: none; display: flex; flex-direction: column; gap: 10px; margin-top: 10px; }
+    .debate-list li { font-size: 12.5px; color: var(--text-primary); line-height: 1.6; padding-left: 14px; position: relative; }
+    .debate-list li::before {
+      content: ""; width: 5px; height: 5px; border-radius: 50%;
+      position: absolute; left: 0; top: 8px; background: var(--text-muted);
+    }
+
+    .trigger-item {
+      display: flex; align-items: center; justify-content: space-between; gap: 12px;
+      padding: 10px 12px; border-radius: var(--radius-sm);
+      border: 1px solid var(--border); background: var(--bg-subtle); margin-bottom: 8px;
+    }
+    .trigger-item:last-child { margin-bottom: 0; }
+
+    /* DCF Matrix */
+    .dcf-controls { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; margin-bottom: 12px; }
+    .dcf-control { display: flex; align-items: center; gap: 8px; font-size: 12px; color: var(--text-secondary); }
+    .dcf-cell-active { background: var(--blue-bg) !important; color: var(--blue-fg) !important; font-weight: 700; }
+
+    /* Screener */
+    .sql-box {
+      font-family: var(--font-mono); font-size: 11.5px; line-height: 1.6;
+      background: var(--bg-subtle); border: 1px solid var(--border);
+      border-radius: var(--radius-sm); padding: 11px 13px; color: var(--text-primary);
+      overflow-x: auto; white-space: pre;
+    }
+    .query-input-row { display: flex; gap: 8px; }
+    .text-input {
+      flex: 1; height: 34px; padding: 0 12px; border-radius: var(--radius-sm);
+      border: 1px solid var(--border-strong); background: var(--bg-surface);
+      color: var(--text-primary); font-family: var(--font-sans); font-size: 13px;
+    }
+    .text-input:focus { outline: none; border-color: var(--blue-fg); }
+    .chip-row { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+    .chip {
+      font-size: 11.5px; padding: 3px 9px; border-radius: var(--radius-sm);
+      border: 1px solid var(--border); background: var(--bg-subtle);
+      color: var(--text-secondary); cursor: pointer;
+    }
+    .chip:hover { border-color: var(--border-strong); color: var(--text-primary); }
+
+    /* Right Dock: Copilot & Citation Grounding Drawer */
+    .right-dock {
+      background: var(--bg-surface); border-left: 1px solid var(--border);
+      display: flex; flex-direction: column; min-height: 0; overflow: hidden;
+    }
+    .dock-tabs {
+      display: flex; border-bottom: 1px solid var(--border); padding: 0 12px;
+      height: 40px; align-items: center; justify-content: space-between; flex-shrink: 0;
+    }
+    .dock-tab-group { display: flex; gap: 4px; }
+    .dock-tab {
+      border: none; background: transparent; padding: 6px 10px; font-size: 12px;
+      font-weight: 500; color: var(--text-secondary); cursor: pointer;
+      border-bottom: 2px solid transparent; height: 40px;
+    }
+    .dock-tab.active { color: var(--text-primary); font-weight: 600; border-bottom-color: var(--accent-ink); }
+
+    .dock-pane { display: none; flex: 1; flex-direction: column; min-height: 0; }
+    .dock-pane.active { display: flex; }
+
+    .context-strip {
+      padding: 8px 12px; border-bottom: 1px solid var(--border);
+      background: var(--bg-subtle); display: flex; flex-wrap: wrap; gap: 5px;
+      align-items: center; font-size: 11px; color: var(--text-muted);
+    }
+    .ctx-chip {
+      font-family: var(--font-mono); font-size: 10.5px; padding: 1px 6px;
+      border-radius: 4px; background: var(--bg-surface); border: 1px solid var(--border);
+      color: var(--text-secondary);
+    }
+
+    .chat-stream {
+      flex: 1; overflow-y: auto; padding: 14px 14px; display: flex; flex-direction: column; gap: 12px;
+    }
+    .msg { display: flex; flex-direction: column; gap: 5px; }
+    .msg-role { font-size: 10.5px; font-family: var(--font-mono); color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.04em; }
+    .msg-bubble {
+      padding: 10px 12px; border-radius: var(--radius-md); font-size: 12.5px;
+      line-height: 1.6; border: 1px solid var(--border);
+    }
+    .msg.user .msg-bubble { background: var(--bg-subtle); color: var(--text-primary); }
+    .msg.ai .msg-bubble { background: var(--bg-surface); color: var(--text-primary); }
+    .tool-trace {
+      font-family: var(--font-mono); font-size: 10.5px; color: var(--text-secondary);
+      background: var(--bg-subtle); border: 1px solid var(--border);
+      border-radius: 4px; padding: 6px 8px; margin-bottom: 6px;
+      display: flex; flex-direction: column; gap: 2px;
+    }
+
+    .skill-bar {
+      padding: 8px 12px; border-top: 1px solid var(--border);
+      display: flex; flex-wrap: wrap; gap: 5px; background: var(--bg-subtle);
+    }
+    .skill-btn {
+      font-family: var(--font-mono); font-size: 11px; padding: 3px 7px;
+      border-radius: 4px; border: 1px solid var(--border); background: var(--bg-surface);
+      color: var(--text-primary); cursor: pointer;
+    }
+    .skill-btn:hover { border-color: var(--blue-fg); color: var(--blue-fg); }
+    .chat-composer {
+      padding: 10px 12px; border-top: 1px solid var(--border);
+      display: flex; gap: 6px; background: var(--bg-surface);
+    }
+
+    /* PDF Citation Audit Mock */
+    .cite-meta-box {
+      padding: 10px 14px; border-bottom: 1px solid var(--border);
+      background: var(--bg-subtle); font-size: 11.5px; display: flex; flex-direction: column; gap: 4px;
+    }
+    .pdf-viewer {
+      flex: 1; overflow-y: auto; padding: 14px; background: var(--bg-canvas);
+    }
+    .pdf-page {
+      background: #FFFFFF; color: #1A1A1A; border: 1px solid #DCD9D0;
+      border-radius: 4px; padding: 16px 15px; font-size: 11.5px; line-height: 1.65;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.04);
+    }
+    .pdf-page-head {
+      display: flex; justify-content: space-between; gap: 10px; font-family: var(--font-mono);
+      font-size: 10px; color: #6E6D68; padding-bottom: 8px; margin-bottom: 10px;
+      border-bottom: 1px solid #E5E3DC;
+    }
+    .pdf-page-head span:last-child { white-space: nowrap; flex-shrink: 0; }
+    .pdf-table { width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 11px; }
+    .pdf-table th, .pdf-table td { border: 1px solid #D8D5CD; padding: 5px 6px; text-align: left; }
+    .pdf-table th { background: #F5F4F0; font-weight: 600; }
+    .pdf-highlight {
+      background: var(--highlight-bg); outline: 1.5px solid var(--highlight-border);
+      border-radius: 2px; padding: 1px 2px; font-weight: 600; color: #171715;
+    }
+
+    /* Bottom Compliance Footer */
+    .bottom-bar {
+      height: 28px; background: var(--bg-surface); border-top: 1px solid var(--border);
+      padding: 0 14px; display: flex; align-items: center; justify-content: space-between;
+      font-size: 11px; color: var(--text-muted); flex-shrink: 0;
+    }
+
+    /* Modal Search */
+    .modal-backdrop {
+      display: none; position: fixed; inset: 0; background: rgba(18, 19, 20, 0.36);
+      z-index: 100; align-items: flex-start; justify-content: center; padding-top: 84px;
+    }
+    .modal-backdrop.open { display: flex; }
+    .modal-card {
+      width: 520px; max-width: 92vw; background: var(--bg-surface);
+      border: 1px solid var(--border-strong); border-radius: var(--radius-md);
+      overflow: hidden; box-shadow: 0 12px 32px rgba(0,0,0,0.14);
+    }
+    .modal-input {
+      width: 100%; border: none; border-bottom: 1px solid var(--border);
+      padding: 13px 16px; font-size: 14px; background: var(--bg-surface);
+      color: var(--text-primary); outline: none;
+    }
+    .modal-list { max-height: 300px; overflow-y: auto; padding: 6px; }
+    .modal-row {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 8px 10px; border-radius: var(--radius-sm); cursor: pointer;
+    }
+    .modal-row:hover { background: var(--bg-subtle); }
+
+    @media (max-width: 1160px) {
+      .app-shell { grid-template-columns: 188px 1fr 320px; }
+      .guard-grid { grid-template-columns: repeat(3, 1fr); }
+      .bento-2 { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <!-- Top Bar -->
+  <header class="topbar">
+    <div class="brand-group">
+      <div class="win-dots" aria-hidden="true"><span></span><span></span><span></span></div>
+      <div class="brand-mark">AD</div>
+      <span class="brand-name">AlphaDesk</span>
+      <span class="brand-tag">PROTO v0.1</span>
+    </div>
+
+    <div class="search-trigger" id="openSearchBtn" role="button" tabindex="0">
+      <div class="search-trigger-left">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+        <span>检索股票代码 / 名称 / 财报附注 / 技能指令...</span>
+      </div>
+      <kbd>Cmd K</kbd>
+    </div>
+
+    <div class="topbar-actions">
+      <div class="snapshot-pill" title="当前全局 PIT 数据快照">
+        <span class="live-dot"></span>
+        <span>PIT 2026-11-25 15:00 CST</span>
+      </div>
+      <button class="btn" id="prdToggleBtn" title="显示与 PRD-Map 对应的模块编号">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="18" height="18" rx="2"/><path d="M9 3v18M3 9h18"/></svg>
+        <span>PRD 标注</span>
+      </button>
+      <button class="btn" id="themeToggleBtn">深色终端</button>
+      <button class="btn" id="rightToggleBtn">收起侧栏</button>
+    </div>
+  </header>
+
+  <!-- Main 3-Column App Shell -->
+  <div class="app-shell" id="appShell">
+    <!-- Left Navigation -->
+    <aside class="left-rail">
+      <div>
+        <div class="rail-section-title">投研工作区</div>
+        <div class="nav-item" data-view="command">
+          <div class="nav-item-left">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M4 19h16M4 15l4-4 4 3 8-8"/></svg>
+            <span>晨间简报与监控</span>
+          </div>
+          <span class="nav-badge">2</span>
+        </div>
+        <div class="nav-item active" data-view="workspace">
+          <div class="nav-item-left">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 10h18M10 10v10"/></svg>
+            <span>个股深度画布</span>
+          </div>
+          <span class="nav-stage">MVP</span>
+        </div>
+        <div class="nav-item" data-view="grid">
+          <div class="nav-item-left">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><rect x="14" y="14" width="7" height="7"/></svg>
+            <span>同行对比矩阵</span>
+          </div>
+          <span class="nav-stage">V1</span>
+        </div>
+        <div class="nav-item" data-view="research">
+          <div class="nav-item-left">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M6 3h9l5 5v13H6z"/><path d="M15 3v5h5M9 13h6M9 17h6"/></svg>
+            <span>深度研报与辩论</span>
+          </div>
+          <span class="nav-stage">V1</span>
+        </div>
+        <div class="nav-item" data-view="screener">
+          <div class="nav-item-left">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 5h18l-7 8v5l-4 2v-7L3 5z"/></svg>
+            <span>NL / SQL 选股器</span>
+          </div>
+          <span class="nav-stage">V1</span>
+        </div>
+      </div>
+
+      <div>
+        <div class="rail-section-title">自选监控池（点击切换）</div>
+        <div id="watchlistNav"></div>
+      </div>
+
+      <div style="margin-top:auto; padding:10px; border-radius:6px; background:var(--bg-subtle); border:1px solid var(--border);">
+        <div style="font-size:11px; font-weight:600; margin-bottom:4px;">确定性计算引擎</div>
+        <div style="font-size:11px; color:var(--text-muted); line-height:1.5;">
+          所有价格、分位与排雷指标均由 Python/DuckDB 计算，LLM 严禁口算数字。
+        </div>
+      </div>
+    </aside>
+
+    <!-- Main Content Stage -->
+    <main class="main-stage">
+      <div class="stage-inner">
+
+        <!-- VIEW 1: COMMAND CENTER -->
+        <section class="view-panel" id="view-command">
+          <div style="display:flex; align-items:flex-end; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+            <div>
+              <h1 class="serif" style="font-size:24px; font-weight:600;">晨间简报与自选排雷中枢</h1>
+              <div style="font-size:12px; color:var(--text-muted); margin-top:3px;">
+                2026-11-25 星期三 · 飞书 Webhook 已同步推送 08:30 盘前简报 · 自选池监控 4 只标的
+              </div>
+            </div>
+            <div class="segmented" id="briefTabGroup">
+              <button class="seg-btn active" data-brief="all">全部事件 (4)</button>
+              <button class="seg-btn" data-brief="risk">仅公告排雷 (2)</button>
+              <button class="seg-btn" data-brief="pre">盘前催化 (2)</button>
+            </div>
+          </div>
+
+          <div class="card">
+            <span class="prd-tag">M1.4 北向替代资金代理</span>
+            <div class="card-header">
+              <div class="card-title">
+                <span>外资风险偏好与内资情绪代理条</span>
+                <span class="pill pill-neutral mono">2024.8.19 北向日频停披替代口径</span>
+              </div>
+              <span class="card-subtitle">严格隔离外资代理与内资杠杆，不拼凑伪北向净买入</span>
+            </div>
+            <div class="proxy-strip">
+              <div class="proxy-card">
+                <div class="proxy-label">USD / CNH 离岸汇率</div>
+                <div class="proxy-val">7.1842</div>
+                <div class="mono down" style="font-size:11px;">-0.18% · 人民币走强</div>
+              </div>
+              <div class="proxy-card">
+                <div class="proxy-label">KWEB 海外中概 ETF</div>
+                <div class="proxy-val">$33.84</div>
+                <div class="mono up" style="font-size:11px;">+1.42% · 净申购 +$68M</div>
+              </div>
+              <div class="proxy-card">
+                <div class="proxy-label">富时中国 A50 夜盘</div>
+                <div class="proxy-val">13,642</div>
+                <div class="mono up" style="font-size:11px;">+0.64% · 偏暖开盘映射</div>
+              </div>
+              <div class="proxy-card">
+                <div class="proxy-label">全 A 两融余额（T+1 内资）</div>
+                <div class="proxy-val">1.84 万亿</div>
+                <div class="mono up" style="font-size:11px;">+62.4 亿 · 风险偏好温和</div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <span class="prd-tag">M1.1 + M1.2 盘前催化与公告排雷</span>
+            <div class="card-header">
+              <div class="card-title">晚间公告自动排雷 & 盘前自选映射</div>
+              <button class="btn" onclick="alert('模拟发送成功：已将今日 2 条排雷摘要卡片通过飞书 Webhook 推送至指定群组。')">测试飞书推送</button>
+            </div>
+            <div class="brief-grid" id="briefCards">
+              <div class="alert-card severity-amber" data-cat="risk">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <span class="pill pill-amber">黄灯提示 · 客户集中度 / 汇率</span>
+                  <span class="mono" style="font-size:11px; color:var(--text-muted);">昨晚 20:14 · CNINFO</span>
+                </div>
+                <div style="font-weight:600; font-size:13px;">立讯精密 (002475.SZ)：发布海外子公司扩产与套期保值额度公告</div>
+                <div style="font-size:12px; color:var(--text-secondary);">
+                  拟开展不超过 45 亿美元外汇衍生品套保，占最新净资产比例显著高于行业均值，主要对冲北美大客户美元结算波动。<button class="cite-btn" data-cite="c5">[5]</button>
+                </div>
+                <div><button class="btn" onclick="jumpToStock('002475.SZ')">进入个股画布核验</button></div>
+              </div>
+
+              <div class="alert-card severity-blue" data-cat="pre">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <span class="pill pill-blue">盘前催化 · 产能与储能订单</span>
+                  <span class="mono" style="font-size:11px; color:var(--text-muted);">今日 08:15 · 交易所公告</span>
+                </div>
+                <div style="font-weight:600; font-size:13px;">宁德时代 (300750.SZ)：匈牙利二期产线调试进度更新 + 欧洲储能长单</div>
+                <div style="font-size:12px; color:var(--text-secondary);">
+                  公告确认海外基地首条电芯产线进入客户验证阶段，三季报披露合同负债环比增长 14.6%，可结合同行矩阵核对海外毛利率差异。<button class="cite-btn" data-cite="c1">[1]</button>
+                </div>
+                <div><button class="btn" onclick="jumpToStock('300750.SZ')">进入个股画布核验</button></div>
+              </div>
+
+              <div class="alert-card severity-red" data-cat="risk">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <span class="pill pill-red">证伪条件临近 · 渠道批价观察</span>
+                  <span class="mono" style="font-size:11px; color:var(--text-muted);">今日 08:25 · 行业跟踪</span>
+                </div>
+                <div style="font-weight:600; font-size:13px;">贵州茅台 (600519.SH)：直销占比同比微降，关注年末渠道批价</div>
+                <div style="font-size:12px; color:var(--text-secondary);">
+                  2026Q3 财报显示 i茅台平台销售收入同比放缓，合同负债 98.4 亿元，距离你设定的“合同负债低于 85 亿元”证伪阈值尚留安全垫。<button class="cite-btn" data-cite="c4">[4]</button>
+                </div>
+                <div><button class="btn" onclick="jumpToStock('600519.SH')">进入个股画布核验</button></div>
+              </div>
+
+              <div class="alert-card severity-blue" data-cat="pre">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                  <span class="pill pill-blue">美股隔夜 · SEC 10-Q 更新</span>
+                  <span class="mono" style="font-size:11px; color:var(--text-muted);">今日 05:30 · SEC EDGAR</span>
+                </div>
+                <div style="font-weight:600; font-size:13px;">NVIDIA (NVDA.US)：数据中心分部毛利率 73.8%，符合先前指引区间</div>
+                <div style="font-size:12px; color:var(--text-secondary);">
+                  iXBRL 确定性抽取已完成入库；Blackwell 机柜交付爬坡带动存货周转微升，点击可审计 10-Q 原始表格坐标。<button class="cite-btn" data-cite="c6">[6]</button>
+                </div>
+                <div><button class="btn" onclick="jumpToStock('NVDA.US')">进入个股画布核验</button></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="card">
+            <span class="prd-tag">M1.3 自选监控总表</span>
+            <div class="card-header">
+              <div class="card-title">自选股确定性排雷与估值分位总表（点击行进入个股画布）</div>
+            </div>
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>标的</th>
+                  <th>市场</th>
+                  <th class="num">最新价</th>
+                  <th class="num">涨跌幅</th>
+                  <th class="num">PE-TTM</th>
+                  <th class="num">5年PE分位</th>
+                  <th>新国九条排雷</th>
+                  <th>最新事件状态</th>
+                </tr>
+              </thead>
+              <tbody id="commandWatchlistTable"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <!-- VIEW 2: STOCK RESEARCH WORKSPACE (DEFAULT) -->
+        <section class="view-panel active" id="view-workspace">
+          <div class="card">
+            <span class="prd-tag">M2.1 资产头与复权状态</span>
+            <div class="asset-header">
+              <div>
+                <div class="asset-title-row">
+                  <h1 class="asset-name" id="wsName">宁德时代</h1>
+                  <span class="asset-ticker" id="wsTicker">300750.SZ</span>
+                  <span class="pill pill-neutral" id="wsMarket">A股 · 创业板</span>
+                  <span class="pill pill-green" id="wsRiskBadge">新国九条排雷：6/6 绿灯</span>
+                </div>
+                <div class="asset-meta">
+                  <span class="mono" style="font-size:11.5px; color:var(--text-muted);" id="wsSource">主源：Tushare Pro + CNINFO 原文 · 延迟：日终 EOD</span>
+                  <div class="segmented" id="adjToggle">
+                    <button class="seg-btn active" data-adj="qfq">前复权</button>
+                    <button class="seg-btn" data-adj="hfq">后复权</button>
+                    <button class="seg-btn" data-adj="raw">不复权</button>
+                  </div>
+                </div>
+              </div>
+              <div class="price-block">
+                <div class="price-main" id="wsPrice">264.80</div>
+                <div class="price-sub">
+                  <span id="wsChg" class="up">+6.42 (+2.48%)</span>
+                  <span style="color:var(--text-muted);" id="wsMcap">总市值 1.16万亿</span>
+                </div>
+              </div>
+            </div>
+
+            <div style="display:flex; align-items:center; justify-content:space-between; margin-top:12px; gap:8px; flex-wrap:wrap;">
+              <div style="display:flex; gap:6px; flex-wrap:wrap;">
+                <button class="btn btn-primary" onclick="switchView('research')">启动后台深度研报</button>
+                <button class="btn" onclick="switchView('grid')">加入同行对比矩阵</button>
+                <button class="btn" onclick="runSkill('/排雷体检')">Copilot 深度排雷</button>
+              </div>
+              <div style="font-size:11.5px; color:var(--text-muted);">
+                当前画布上下文已自动同步至右侧 Copilot · <span class="mono">snapshot_id: snp_20261125_eod</span>
+              </div>
+            </div>
+          </div>
+
+          <!-- New 9-Article & Financial Guard Strip -->
+          <div class="card">
+            <span class="prd-tag">M2.2 新国九条与财务确定性排雷</span>
+            <div class="card-header">
+              <div class="card-title">
+                <span>确定性排雷红绿灯引擎</span>
+                <span class="pill pill-blue mono">Computed · Python Rules v2.4</span>
+              </div>
+              <span class="card-subtitle">点击任意指标卡核验底层公式、监管红线阈值与财报源字段</span>
+            </div>
+            <div class="guard-grid" id="guardGrid"></div>
+            <div class="guard-detail-bar" id="guardDetailBar">
+              <span>点击上方任意排雷规则卡片，查看确定性计算公式与源数据审计字段。</span>
+            </div>
+          </div>
+
+          <!-- Bento: Chart + Financial KPI (with PIT toggle) -->
+          <div class="bento-2">
+            <div class="card">
+              <span class="prd-tag">M2.3 交互式 K 线与估值分位</span>
+              <div class="card-header">
+                <div class="card-title" id="chartTitle">价格走势与公司行动标点</div>
+                <div class="segmented" id="chartModeToggle">
+                  <button class="seg-btn active" data-mode="kline">日 K 线</button>
+                  <button class="seg-btn" data-mode="pe">5 年 PE 分位</button>
+                  <button class="seg-btn" data-mode="rev">单季业绩趋势</button>
+                </div>
+              </div>
+              <div id="chartContainer"></div>
+              <div class="chart-legend" id="chartLegend"></div>
+            </div>
+
+            <div class="card">
+              <span class="prd-tag">M2.4 + M2.5 确定性三表与 PIT 切换</span>
+              <div class="card-header">
+                <div class="card-title">核心财务 KPI（PIT 审计）</div>
+                <div class="segmented" id="pitToggle">
+                  <button class="seg-btn active" data-pit="latest">最新重述</button>
+                  <button class="seg-btn" data-pit="as_reported">当时已知 PIT</button>
+                </div>
+              </div>
+              <table class="data-table kpi-compact">
+                <thead>
+                  <tr>
+                    <th>核心指标 (亿元/%)</th>
+                    <th class="num">2025FY</th>
+                    <th class="num">2026Q3</th>
+                    <th class="num">同比</th>
+                  </tr>
+                </thead>
+                <tbody id="kpiTableBody"></tbody>
+              </table>
+              <div id="pitNotice" style="margin-top:10px; font-size:11px; color:var(--text-muted); line-height:1.5;">
+                所有数字均为 <span class="mono">Decimal</span> 确定性计算，点击角标可直达原财报单元格。切换「当时已知 PIT」可对比历史上是否发生追溯重述。
+              </div>
+            </div>
+          </div>
+
+          <!-- Announcements & Filings Feed -->
+          <div class="card">
+            <span class="prd-tag">M2.6 公告与财报原文时间轴</span>
+            <div class="card-header">
+              <div class="card-title">法定公告、财报与机构调研溯源流</div>
+              <span class="card-subtitle">点击任意文档右侧「审计原文」即在右侧抽屉高亮对应页与表格</span>
+            </div>
+            <div id="filingsFeed"></div>
+          </div>
+        </section>
+
+        <!-- VIEW 3: GENERATIVE GRID -->
+        <section class="view-panel" id="view-grid">
+          <div style="display:flex; align-items:flex-end; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+            <div>
+              <h1 class="serif" style="font-size:24px; font-weight:600;">同行横向对比矩阵（Generative Grid）</h1>
+              <div style="font-size:12px; color:var(--text-muted); margin-top:3px;">
+                动力电池核心 4 强 · 左侧为 100% 确定性财务列，右侧为并发抽取的带原文溯源 AI 提问列
+              </div>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <button class="btn btn-primary" id="addAiColBtn">+ 新增 AI 提问列（资本开支规划）</button>
+              <button class="btn" onclick="alert('已按当前授权策略导出 CSV（附带每个单元格的 doc_sha256 与页码引文）。')">导出带溯源 CSV</button>
+            </div>
+          </div>
+
+          <div class="card" style="overflow-x:auto;">
+            <span class="prd-tag">M3.1–M3.3 确定性列 + AI 溯源列混排</span>
+            <table class="data-table" id="genGridTable">
+              <thead>
+                <tr id="genGridHead">
+                  <th style="min-width:128px;">上市公司</th>
+                  <th class="num">2026Q3 毛利率<br/><span class="pill pill-blue mono" style="margin-top:3px;">Computed</span></th>
+                  <th class="num">经营现金流/净利<br/><span class="pill pill-blue mono" style="margin-top:3px;">Computed</span></th>
+                  <th style="min-width:210px;">海外产能与关税应对<br/><span class="pill pill-neutral mono" style="margin-top:3px;">AI · 原文溯源</span></th>
+                  <th style="min-width:210px;">管理层 2026Q4 景气指引<br/><span class="pill pill-neutral mono" style="margin-top:3px;">AI · 原文溯源</span></th>
+                </tr>
+              </thead>
+              <tbody id="genGridBody">
+                <tr>
+                  <td><strong>宁德时代</strong><br/><span class="mono" style="font-size:11px; color:var(--text-muted);">300750.SZ</span></td>
+                  <td class="num"><strong>28.4%</strong><br/><span class="up" style="font-size:11px;">+2.1pct</span></td>
+                  <td class="num"><strong>1.42x</strong></td>
+                  <td>匈牙利一期产能爬坡顺畅，二期电芯产线进入欧洲主机厂认证，北美以 LRS 技术授权轻资产模式规避直接关税。<button class="cite-btn" data-cite="c1">[1]</button></td>
+                  <td>排产维持高位，神行/麒麟超充占比突破 40%，储能出货增速高于动力电池。<button class="cite-btn" data-cite="c2">[2]</button></td>
+                </tr>
+                <tr>
+                  <td><strong>比亚迪</strong><br/><span class="mono" style="font-size:11px; color:var(--text-muted);">002594.SZ</span></td>
+                  <td class="num"><strong>21.6%</strong><br/><span class="up" style="font-size:11px;">+0.8pct</span></td>
+                  <td class="num"><strong>1.35x</strong></td>
+                  <td>泰国、巴西整车工厂已投产，匈牙利基地建设中，核心聚焦海外本土化整车组装带动自供电池消化。<button class="cite-btn" data-cite="c3">[3]</button></td>
+                  <td>预计全年海外销量同比翻倍以上，高端品牌矩阵改善单车毛利结构。<button class="cite-btn" data-cite="c3">[3]</button></td>
+                </tr>
+                <tr>
+                  <td><strong>亿纬锂能</strong><br/><span class="mono" style="font-size:11px; color:var(--text-muted);">300014.SZ</span></td>
+                  <td class="num"><strong>17.9%</strong><br/><span class="down" style="font-size:11px;">-0.4pct</span></td>
+                  <td class="num"><strong>1.08x</strong></td>
+                  <td>马来西亚储能工厂一期投产，美国合资商用车电池项目（ACT）推进中，采用 CLS 合作模式分担资本开支。<button class="cite-btn" data-cite="c2">[2]</button></td>
+                  <td>大圆柱与大铁锂储能电芯交付提速，但海外爬坡期折旧对短期利润率形成扰动。<button class="cite-btn" data-cite="c2">[2]</button></td>
+                </tr>
+                <tr>
+                  <td><strong>国轩高科</strong><br/><span class="mono" style="font-size:11px; color:var(--text-muted);">002074.SZ</span></td>
+                  <td class="num"><strong>18.2%</strong><br/><span class="up" style="font-size:11px;">+0.5pct</span></td>
+                  <td class="num"><strong>0.94x</strong></td>
+                  <td>德国哥廷根与摩洛哥超级工厂稳步推进，大众集团战略持股提供欧洲订单确定性，但有息负债率偏高需跟踪。<button class="cite-btn" data-cite="c3">[3]</button></td>
+                  <td>聚焦大众标准电芯放量及海外储能集装箱订单兑现，资本开支节奏趋于审慎。<button class="cite-btn" data-cite="c3">[3]</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+
+          <div class="card">
+            <span class="prd-tag">M3.4 概念板块含金量去伪</span>
+            <div class="card-header">
+              <div class="card-title">A 股热门概念「多源交集 + 主营含金量穿透」示例：固态电池</div>
+              <span class="pill pill-amber">识别并剔除 19 家主营占比 &lt; 1% 的蹭热点标的</span>
+            </div>
+            <div style="font-size:12px; color:var(--text-secondary); line-height:1.65;">
+              交叉比对三套行业概念成分并穿透近一期年报分部营收与研发附注：仅 <strong>7 家</strong> 在财报正文明确披露中试线资本开支与样品验证里程碑；其余 <strong>19 家</strong> 仅在互动易提及“持续关注/储备技术”，已在筛选视图默认降权标注。
+            </div>
+          </div>
+        </section>
+
+        <!-- VIEW 4: DEEP RESEARCH & BULL/BEAR -->
+        <section class="view-panel" id="view-research">
+          <div style="display:flex; align-items:flex-end; justify-content:space-between; flex-wrap:wrap; gap:12px;">
+            <div>
+              <h1 class="serif" style="font-size:24px; font-weight:600;">深度投研备忘录：宁德时代 (300750.SZ)</h1>
+              <div style="font-size:12px; color:var(--text-muted); margin-top:3px;">
+                Run ID: <span class="mono">run_20261125_catl_01</span> · 预解析全流程耗时 <span class="mono">45.5s</span> · 实耗模型成本 <span class="mono">¥0.52</span> · Verifier 数值核验 <span class="mono">100% PASS</span>
+              </div>
+            </div>
+            <div style="display:flex; gap:8px;">
+              <button class="btn" onclick="alert('已生成带页脚溯源索引的 Markdown 备忘录。')">导出 Markdown</button>
+              <button class="btn btn-primary" onclick="runSkill('/生成证伪清单')">在 Copilot 追问细节</button>
+            </div>
+          </div>
+
+          <!-- Execution Trace -->
+          <div class="card">
+            <span class="prd-tag">M4.3 异步多专家执行轨</span>
+            <div class="pipeline-bar">
+              <div class="pipe-step">
+                <div class="pipe-name"><span>1. Planner 冻结快照</span><span class="pill pill-green mono">1.8s</span></div>
+                <div class="pipe-meta">固定 PIT 截点与工具预算</div>
+              </div>
+              <div class="pipe-step">
+                <div class="pipe-name"><span>2. 三路专家并行</span><span class="pill pill-green mono">26.4s</span></div>
+                <div class="pipe-meta">财务 / 产业链 / 估值工具</div>
+              </div>
+              <div class="pipe-step">
+                <div class="pipe-name"><span>3. 红队 Critic 辩论</span><span class="pill pill-green mono">14.2s</span></div>
+                <div class="pipe-meta">1 轮受控反证检索</div>
+              </div>
+              <div class="pipe-step">
+                <div class="pipe-name"><span>4. Verifier 门禁</span><span class="pill pill-blue mono">3.1s</span></div>
+                <div class="pipe-meta">18/18 数字具确定性血缘</div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Bull vs Bear -->
+          <div class="debate-grid annotated" style="position:relative;">
+            <span class="prd-tag">M4.4 受控多空辩论 Bull vs Bear</span>
+            <div class="debate-col bull">
+              <div style="display:flex; align-items:center; justify-content:space-between;">
+                <span style="font-weight:600; font-size:13.5px; color:var(--red-fg);">多头核心支柱（Bull Case）</span>
+                <span class="pill pill-red mono">3 项已证论据</span>
+              </div>
+              <ul class="debate-list">
+                <li><strong>单位盈利护城河极深</strong>：2026Q3 毛利率升至 <span class="mono">28.4%</span>（同比 +2.1pct），碳酸锂低位周期中通过神行/麒麟高端溢价实现单 Wh 净利逆势企稳。<button class="cite-btn" data-cite="c1">[1]</button></li>
+                <li><strong>现金牛属性与分红强化</strong>：经营现金流净额/归母净利达 <span class="mono">1.42x</span>，在手货币资金充裕且资本开支强度较 2022 峰值显著回落，自由现金流转化率提升。<button class="cite-btn" data-cite="c2">[2]</button></li>
+                <li><strong>海外轻资产技术授权破局</strong>：欧洲匈牙利基地本地化 + 北美 LRS 许可模式降低地缘关税与重资产折旧敞口。<button class="cite-btn" data-cite="c1">[1]</button></li>
+              </ul>
+            </div>
+
+            <div class="debate-col bear">
+              <div style="display:flex; align-items:center; justify-content:space-between;">
+                <span style="font-weight:600; font-size:13.5px; color:var(--green-fg);">空头红队质疑（Bear Case）</span>
+                <span class="pill pill-green mono">3 项反方约束</span>
+              </div>
+              <ul class="debate-list">
+                <li><strong>欧洲电动化节奏与政策不确定性</strong>：若欧洲车企碳排放考核松动或本土补贴退坡，匈牙利高折旧产线的产能利用率可能低于预期。<button class="cite-btn" data-cite="c2">[2]</button></li>
+                <li><strong>二线储能电芯价格战外溢</strong>：国内大型储能招投标单价持续承压，若海外储能毛利向国内收敛，将拖累第二增长曲线盈利弹性。<button class="cite-btn" data-cite="c2">[2]</button></li>
+                <li><strong>技术路线代际切换风险</strong>：全固态电池量产时间表若被竞争对手提前突破，现有液态电池庞大固定资产可能面临加速折旧评估。<button class="cite-btn" data-cite="c3">[3]</button></li>
+              </ul>
+            </div>
+          </div>
+
+          <!-- Deterministic DCF Sensitivity -->
+          <div class="card">
+            <span class="prd-tag">M4.6 确定性 DCF 敏感性矩阵</span>
+            <div class="card-header">
+              <div class="card-title">
+                <span>确定性估值敏感性测算（非目标价 · 仅展示假设与隐含价值区间）</span>
+                <span class="pill pill-blue mono">Computed · Decimal DCF</span>
+              </div>
+              <span class="card-subtitle">拖动假设参数实时重算，不提供买卖建议</span>
+            </div>
+            <div class="dcf-controls">
+              <label class="dcf-control">
+                <span>基准自由现金流增速 (5Y):</span>
+                <input type="range" id="dcfGrowth" min="6" max="18" value="12" step="1" />
+                <strong class="mono" id="dcfGrowthVal">12%</strong>
+              </label>
+              <label class="dcf-control">
+                <span>净现金调整项（亿元）:</span>
+                <strong class="mono">+1,420 亿</strong>
+              </label>
+              <label class="dcf-control">
+                <span>当前总市值参照:</span>
+                <strong class="mono">11,640 亿</strong>
+              </label>
+            </div>
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>隐含股权价值（亿元）· WACC \ 永续增长 g</th>
+                  <th class="num">g = 2.0%</th>
+                  <th class="num">g = 2.5%</th>
+                  <th class="num">g = 3.0%</th>
+                  <th class="num">g = 3.5%</th>
+                </tr>
+              </thead>
+              <tbody id="dcfMatrixBody"></tbody>
+            </table>
+          </div>
+
+          <!-- Falsification Triggers -->
+          <div class="card">
+            <span class="prd-tag">M6.1 + M6.2 可量化证伪条件绑定</span>
+            <div class="card-header">
+              <div class="card-title">可量化证伪触发条件（Falsification Triggers）</div>
+              <span class="card-subtitle">绑定至投研笔记后，新财报或公告落库将自动检测并推送提醒</span>
+            </div>
+            <div id="triggerList">
+              <div class="trigger-item">
+                <div>
+                  <div style="font-weight:600; font-size:12.5px;">条件 1：单季综合毛利率跌破 <span class="mono">24.0%</span>（当前 <span class="mono">28.4%</span>）</div>
+                  <div style="font-size:11.5px; color:var(--text-muted);">触发含义：高端差异化溢价收窄或储能价格战超预期外溢。</div>
+                </div>
+                <button class="btn trigger-bind-btn">绑定监控</button>
+              </div>
+              <div class="trigger-item">
+                <div>
+                  <div style="font-weight:600; font-size:12.5px;">条件 2：经营性现金流 / 归母净利润连续 2 季低于 <span class="mono">0.90x</span>（当前 <span class="mono">1.42x</span>）</div>
+                  <div style="font-size:11.5px; color:var(--text-muted);">触发含义：下游车企账期拉长，盈利含金量显著恶化。</div>
+                </div>
+                <button class="btn trigger-bind-btn active-toggle">已绑定监控</button>
+              </div>
+              <div class="trigger-item">
+                <div>
+                  <div style="font-weight:600; font-size:12.5px;">条件 3：欧洲基地量产公告延期超过 2 个季度或北美 LRS 合作中止</div>
+                  <div style="font-size:11.5px; color:var(--text-muted);">触发含义：出海第二增长逻辑受阻，需重估长期增速假设。</div>
+                </div>
+                <button class="btn trigger-bind-btn">绑定监控</button>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        <!-- VIEW 5: NL / SQL SCREENER -->
+        <section class="view-panel" id="view-screener">
+          <div>
+            <h1 class="serif" style="font-size:24px; font-weight:600;">自然语言 → 透明 PIT SQL 选股器</h1>
+            <div style="font-size:12px; color:var(--text-muted); margin-top:3px;">
+              拒绝黑箱推荐：所有自然语言条件先编译为白名单 DSL 与只读 DuckDB PIT SQL，经你确认后在本地 Parquet 快照毫秒级执行
+            </div>
+          </div>
+
+          <div class="card">
+            <span class="prd-tag">M5.1 NL 转透明 DSL / SQL</span>
+            <div class="query-input-row">
+              <input class="text-input" id="screenerInput" value="近 4 季经营现金流均为正、ROE-TTM 大于 15%、排除 ST 与大股东高质押，按 5 年 PE 分位升序" />
+              <button class="btn btn-primary" id="runScreenerBtn">编译并执行</button>
+            </div>
+            <div class="chip-row">
+              <span class="chip" data-q="近 4 季经营现金流均为正、ROE-TTM 大于 15%、排除 ST 与大股东高质押，按 5 年 PE 分位升序">质量红利筛选</span>
+              <span class="chip" data-q="A 股主板总市值 > 200 亿、近 3 年现金分红率 >= 40%、PE-TTM 处于 5 年 30% 分位以下">稳健高分红蓝筹</span>
+              <span class="chip" data-q="研发费用率 > 8%、扣非净利同比增速 > 25%、商誉占净资产 < 10%、无近一年问询函">高成长低雷区科技</span>
+            </div>
+
+            <div style="margin-top:14px;">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:6px;">
+                <span style="font-size:11.5px; font-weight:600; color:var(--text-secondary);">透明编译后的只读 DuckDB PIT SQL（已由 SQLGlot AST 白名单校验）</span>
+                <span class="pill pill-green mono">as_of = 2026-11-25 · 耗时 0.14s · 命中 4 只样例</span>
+              </div>
+              <div class="sql-box" id="screenerSql">SELECT l.symbol, l.name, f.roe_ttm, f.ocf_4q_pos, v.pe_ttm, v.pe_5y_pct, r.pledge_ratio
+FROM pit_financial_snapshot('2026-11-25') f
+JOIN valuation_snapshot('2026-11-25') v USING (issuer_id)
+JOIN risk_guard_snapshot('2026-11-25') r USING (issuer_id)
+JOIN active_listings('CN_A', '2026-11-25') l USING (issuer_id)
+WHERE l.is_st = FALSE
+  AND f.ocf_4q_all_positive = TRUE      -- 严格区分“四季分别为正”与“TTM 合计为正”
+  AND f.roe_ttm > 0.15
+  AND r.pledge_ratio < 0.30
+ORDER BY v.pe_5y_pct ASC
+LIMIT 50;</div>
+            </div>
+          </div>
+
+          <div class="card">
+            <span class="prd-tag">M5.2 结果表与未入选归因</span>
+            <div class="card-header">
+              <div class="card-title">筛选结果（含一键对比与未入选归因诊断）</div>
+              <button class="btn" id="explainExcludeBtn">诊断未入选示例：为什么 002074.SZ 未入选？</button>
+            </div>
+            <div id="excludeExplainBox" style="display:none; margin-bottom:12px; padding:10px 12px; border-radius:5px; background:var(--amber-bg); border:1px solid var(--amber-border); color:var(--amber-fg); font-size:12px;">
+              <strong>确定性未入选归因（002074.SZ 国轩高科 · as_of 2026-11-25）</strong>：命中 2 条剔除条件 —— ① <span class="mono">roe_ttm = 4.8%</span>（阈值要求 &gt; 15.0%）；② <span class="mono">ocf_4q_all_positive = FALSE</span>（2026Q1 单季经营现金流净额为负）。其余 ST 与质押条件通过。
+            </div>
+            <table class="data-table">
+              <thead>
+                <tr>
+                  <th>代码 / 名称</th>
+                  <th class="num">ROE-TTM</th>
+                  <th class="num">近4季OCF均为正</th>
+                  <th class="num">PE-TTM</th>
+                  <th class="num">5年PE分位</th>
+                  <th class="num">质押率</th>
+                  <th>操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr class="clickable" onclick="jumpToStock('600519.SH')">
+                  <td><strong>贵州茅台</strong> <span class="mono" style="color:var(--text-muted);">600519.SH</span></td>
+                  <td class="num">34.2%</td>
+                  <td class="num"><span class="pill pill-green mono">4/4 PASS</span></td>
+                  <td class="num">21.8x</td>
+                  <td class="num">16.2%</td>
+                  <td class="num">0.0%</td>
+                  <td><button class="btn">查看画布</button></td>
+                </tr>
+                <tr class="clickable" onclick="jumpToStock('002475.SZ')">
+                  <td><strong>立讯精密</strong> <span class="mono" style="color:var(--text-muted);">002475.SZ</span></td>
+                  <td class="num">21.4%</td>
+                  <td class="num"><span class="pill pill-green mono">4/4 PASS</span></td>
+                  <td class="num">18.9x</td>
+                  <td class="num">24.5%</td>
+                  <td class="num">8.2%</td>
+                  <td><button class="btn">查看画布</button></td>
+                </tr>
+                <tr class="clickable" onclick="jumpToStock('300750.SZ')">
+                  <td><strong>宁德时代</strong> <span class="mono" style="color:var(--text-muted);">300750.SZ</span></td>
+                  <td class="num">23.8%</td>
+                  <td class="num"><span class="pill pill-green mono">4/4 PASS</span></td>
+                  <td class="num">20.4x</td>
+                  <td class="num">28.1%</td>
+                  <td class="num">0.4%</td>
+                  <td><button class="btn">查看画布</button></td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+
+      </div>
+    </main>
+
+    <!-- Right Dock: Context-Aware Copilot + Citation Grounding Drawer -->
+    <aside class="right-dock" id="rightDock">
+      <div class="dock-tabs">
+        <div class="dock-tab-group">
+          <button class="dock-tab active" data-dock="copilot">Copilot 助手</button>
+          <button class="dock-tab" data-dock="citation">原文溯源审计</button>
+        </div>
+        <span class="mono" style="font-size:10.5px; color:var(--text-muted);" id="dockStatusLabel">MCP Ready</span>
+      </div>
+
+      <!-- Dock Pane 1: Copilot -->
+      <div class="dock-pane active" id="dock-copilot">
+        <div class="context-strip annotated" style="position:relative;">
+          <span class="prd-tag" style="top:2px; right:6px;">M4.2 上下文注入</span>
+          <span>已挂载上下文：</span>
+          <span class="ctx-chip" id="ctxStockChip">300750.SZ 画布</span>
+          <span class="ctx-chip">2026Q3 三季报</span>
+          <span class="ctx-chip">排雷引擎</span>
+        </div>
+
+        <div class="chat-stream" id="chatStream">
+          <div class="msg ai">
+            <div class="msg-role">AlphaDesk Copilot · Tool-Grounded</div>
+            <div class="msg-bubble">
+              <div class="tool-trace">
+                <span>▸ call get_financial_facts(300750.SZ, pit='latest') -> ok (14 facts)</span>
+                <span>▸ call check_delisting_rules(300750.SZ) -> 6/6 GREEN</span>
+              </div>
+              当前画布为 <strong>宁德时代 (300750.SZ)</strong>。确定性排雷 6 项全绿；2026Q3 扣非净利同比 <span class="mono">+19.4%</span>，毛利率升至 <span class="mono">28.4%</span><button class="cite-btn" data-cite="c1">[1]</button>，当前 PE-TTM <span class="mono">20.4x</span> 位于近 5 年 <span class="mono">28.1%</span> 分位。<br/><br/>
+              你可以直接点击下方 <strong>Markdown Skills</strong> 快捷技能，或点击任意蓝色角标审计财报原文表格。
+            </div>
+          </div>
+        </div>
+
+        <div class="skill-bar">
+          <button class="skill-btn" onclick="runSkill('/排雷体检')">/排雷体检</button>
+          <button class="skill-btn" onclick="runSkill('/季报拆解')">/季报拆解</button>
+          <button class="skill-btn" onclick="runSkill('/同行对比')">/同行对比</button>
+          <button class="skill-btn" onclick="runSkill('/生成证伪清单')">/生成证伪清单</button>
+        </div>
+
+        <div class="chat-composer">
+          <input class="text-input" id="chatInput" style="height:30px; font-size:12px;" placeholder="基于当前画布提问（禁口算，自动调工具）..." />
+          <button class="btn btn-primary" id="chatSendBtn" style="height:30px;">发送</button>
+        </div>
+      </div>
+
+      <!-- Dock Pane 2: Citation Grounding Drawer -->
+      <div class="dock-pane" id="dock-citation">
+        <div class="cite-meta-box annotated" style="position:relative;">
+          <span class="prd-tag" style="top:2px; right:6px;">M4.1 单元格级溯源</span>
+          <div style="display:flex; justify-content:space-between; align-items:center;">
+            <strong id="citeDocTitle">宁德时代：2026 年第三季度报告（正文）</strong>
+            <button class="btn" style="height:22px; font-size:11px; padding:0 7px;" onclick="switchDock('copilot')">返回 Copilot</button>
+          </div>
+          <div class="mono" style="font-size:10.5px; color:var(--text-muted);" id="citeCoords">
+            source: CNINFO · page: 14 / 38 · table: T_03 · bbox: [72, 218, 524, 246]
+          </div>
+          <div class="mono" style="font-size:10px; color:var(--text-muted);" id="citeHash">
+            doc_sha256: 9f4e2a81c7...d30b · locator_granularity: CELL_BBOX
+          </div>
+        </div>
+        <div class="pdf-viewer" id="pdfViewerContent"></div>
+      </div>
+    </aside>
+  </div>
+
+  <!-- Bottom Compliance Bar -->
+  <footer class="bottom-bar">
+    <div>合规声明：本系统定位为客观金融数据整理、确定性排雷与研究辅助工作台，严禁输出买卖建议或目标价，不构成任何投资咨询意见。</div>
+    <div class="mono">Engine: FastAPI + DuckDB PIT + Docling/MinerU · No-Hallucination Guard ON</div>
+  </footer>
+
+  <!-- Cmd+K Search Modal -->
+  <div class="modal-backdrop" id="searchModal">
+    <div class="modal-card">
+      <input class="modal-input" id="modalSearchInput" placeholder="输入代码或名称快速切换标的（如 300750 / 茅台 / NVDA）..." />
+      <div class="modal-list" id="modalResults"></div>
+    </div>
+  </div>
+
+  <script>
+    const STOCKS = {
+      '300750.SZ': {
+        name: '宁德时代', ticker: '300750.SZ', market: 'A股 · 创业板', currency: '¥',
+        source: '主源：Tushare Pro + CNINFO 原文 · 延迟：日终 EOD',
+        price: { qfq: '264.80', hfq: '518.42', raw: '264.80' },
+        chgText: '+6.42 (+2.48%)', isUp: true, mcap: '总市值 1.16万亿',
+        pe: '20.4x', pePct: '28.1%', riskSummary: '新国九条排雷：6/6 绿灯', riskTone: 'green',
+        eventNote: '匈牙利二期调试进展公告',
+        guards: [
+          { label: '营收退市', val: '2,684亿', status: 'green', note: '远高于 1 亿红线', formula: 'deducted_revenue_ttm = 2684.2e8 >= 1e8 (创业板门槛)', cite: 'c1' },
+          { label: '市值红线', val: '1.16万亿', status: 'green', note: '20 日均远超 3 亿', formula: 'min(close_mcap_20d) = 1.11e12 >= 3e8', cite: 'c1' },
+          { label: '三年分红', val: '48.6%', status: 'green', note: '高于 30% 硬门槛', formula: 'sum(cash_div_3y) / avg(net_profit_3y) = 48.6% >= 30%', cite: 'c2' },
+          { label: '存贷双高', val: '健康', status: 'green', note: '净现金 +1,420 亿', formula: 'cash_eq(2640e8) - interest_debt(1220e8) = +1420e8', cite: 'c2' },
+          { label: '商誉占比', val: '0.31%', status: 'green', note: '低于 15% 预警线', formula: 'goodwill(7.4e8) / equity(2385e8) = 0.31% < 15%', cite: 'c2' },
+          { label: '质押问询', val: '0.4% / 0次', status: 'green', note: '近 1 年无监管函', formula: 'pledge_ratio = 0.42% < 30%, inquiry_1y = 0', cite: 'c1' }
+        ],
+        kpis: [
+          { name: '营业收入', fy: '3,620.1', q3: '2,684.2', pitQ3: '2,684.2', yoy: '+8.4%', cite: 'c1' },
+          { name: '扣非净利', fy: '452.8', q3: '368.5', pitQ3: '365.1', yoy: '+19.4%', restated: true, cite: 'c1' },
+          { name: '综合毛利率', fy: '26.3%', q3: '28.4%', pitQ3: '28.4%', yoy: '+2.1pct', cite: 'c1' },
+          { name: 'OCF / 净利', fy: '1.56x', q3: '1.42x', pitQ3: '1.42x', yoy: '-0.08x', cite: 'c2' },
+          { name: '加权 ROE', fy: '23.1%', q3: '23.8%', pitQ3: '23.6%', yoy: '+0.7pct', restated: true, cite: 'c2' }
+        ],
+        filings: [
+          { date: '2026-10-28', tag: '三季报', tone: 'blue', title: '2026 年第三季度报告（正文及财务附注）', cite: 'c1' },
+          { date: '2026-11-24', tag: '经营公告', tone: 'green', title: '关于海外电池基地产线调试进展与储能合作框架公告', cite: 'c2' },
+          { date: '2026-10-29', tag: '业绩说明会', tone: 'neutral', title: '2026Q3 投资者关系活动记录表（含产能利用率与 LRS 问答）', cite: 'c2' }
+        ],
+        series: {
+          qfq: [212, 218, 215, 224, 231, 228, 236, 242, 238, 249, 255, 251, 258, 261, 264.8],
+          hfq: [415, 427, 421, 439, 452, 446, 462, 474, 466, 487, 499, 491, 505, 511, 518.4],
+          raw: [216, 222, 219, 228, 235, 232, 240, 246, 242, 249, 255, 251, 258, 261, 264.8],
+          pe: [44, 39, 34, 31, 29, 25, 22, 18, 17, 19, 21, 23, 20, 19.5, 20.4],
+          rev: [860, 895, 920, 945, 875, 912, 952]
+        }
+      },
+      '600519.SH': {
+        name: '贵州茅台', ticker: '600519.SH', market: 'A股 · 沪市主板', currency: '¥',
+        source: '主源：Tushare Pro + CNINFO 原文 · 延迟：日终 EOD',
+        price: { qfq: '1,542.00', hfq: '11,842.60', raw: '1,542.00' },
+        chgText: '-9.50 (-0.61%)', isUp: false, mcap: '总市值 1.94万亿',
+        pe: '21.8x', pePct: '16.2%', riskSummary: '新国九条排雷：6/6 绿灯', riskTone: 'green',
+        eventNote: '合同负债 98.4 亿（关注批价）',
+        guards: [
+          { label: '营收退市', val: '1,298亿', status: 'green', note: '远高于主板 3 亿', formula: 'deducted_revenue_ttm = 1298.4e8 >= 3e8 (主板门槛)', cite: 'c4' },
+          { label: '市值红线', val: '1.94万亿', status: 'green', note: '远超主板 5 亿红线', formula: 'min(close_mcap_20d) = 1.91e12 >= 5e8', cite: 'c4' },
+          { label: '三年分红', val: '75.0%', status: 'green', note: '承诺分红率 >=75%', formula: 'sum(cash_div_3y) / avg(net_profit_3y) = 75.0% >= 30%', cite: 'c4' },
+          { label: '存贷双高', val: '极优', status: 'green', note: '零有息负债', formula: 'interest_debt = 0, cash_eq = 1712e8', cite: 'c4' },
+          { label: '商誉占比', val: '0.00%', status: 'green', note: '无商誉减值敞口', formula: 'goodwill = 0 / equity = 0.00%', cite: 'c4' },
+          { label: '质押问询', val: '0.0% / 0次', status: 'green', note: '零质押零问询', formula: 'pledge_ratio = 0.00%, inquiry_1y = 0', cite: 'c4' }
+        ],
+        kpis: [
+          { name: '营业总收入', fy: '1,741.4', q3: '1,298.4', pitQ3: '1,298.4', yoy: '+6.8%', cite: 'c4' },
+          { name: '归母净利', fy: '862.3', q3: '641.2', pitQ3: '641.2', yoy: '+6.5%', cite: 'c4' },
+          { name: '合同负债', fy: '95.9', q3: '98.4', pitQ3: '98.4', yoy: '-12.1%', cite: 'c4' },
+          { name: '直销占比', fy: '44.8%', q3: '42.6%', pitQ3: '42.6%', yoy: '-1.9pct', cite: 'c4' },
+          { name: '加权 ROE', fy: '35.1%', q3: '34.2%', pitQ3: '34.2%', yoy: '-0.9pct', cite: 'c4' }
+        ],
+        filings: [
+          { date: '2026-10-26', tag: '三季报', tone: 'blue', title: '2026 年第三季度报告（含合同负债与渠道结构披露）', cite: 'c4' },
+          { date: '2026-11-12', tag: '分红回报', tone: 'green', title: '2026 年中期现金分红实施公告（分红率 75% 规划）', cite: 'c4' }
+        ],
+        series: {
+          qfq: [1610, 1598, 1605, 1582, 1574, 1590, 1568, 1554, 1560, 1548, 1556, 1549, 1558, 1551.5, 1542],
+          hfq: [12360, 12268, 12321, 12145, 12083, 12206, 12037, 11930, 11976, 11884, 11945, 11891, 11960, 11915, 11842.6],
+          raw: [1642, 1630, 1637, 1614, 1606, 1622, 1568, 1554, 1560, 1548, 1556, 1549, 1558, 1551.5, 1542],
+          pe: [48, 44, 38, 35, 33, 30, 28, 26, 25, 24, 23, 22.8, 22.5, 22.1, 21.8],
+          rev: [410, 428, 435, 468, 422, 434, 442]
+        }
+      },
+      '002475.SZ': {
+        name: '立讯精密', ticker: '002475.SZ', market: 'A股 · 深市主板', currency: '¥',
+        source: '主源：Tushare Pro + CNINFO 原文 · 延迟：日终 EOD',
+        price: { qfq: '41.26', hfq: '296.80', raw: '41.26' },
+        chgText: '+0.84 (+2.08%)', isUp: true, mcap: '总市值 2,980亿',
+        pe: '18.9x', pePct: '24.5%', riskSummary: '排雷：5 绿 / 1 黄提示', riskTone: 'amber',
+        eventNote: '昨晚发布 45 亿美元外汇套保公告',
+        guards: [
+          { label: '营收退市', val: '1,962亿', status: 'green', note: '远高于主板 3 亿', formula: 'deducted_revenue_ttm = 1962.5e8 >= 3e8', cite: 'c5' },
+          { label: '市值红线', val: '2,980亿', status: 'green', note: '远超 5 亿红线', formula: 'min(close_mcap_20d) = 2.84e11 >= 5e8', cite: 'c5' },
+          { label: '三年分红', val: '31.4%', status: 'green', note: '略高于 30% 红线', formula: 'sum(cash_div_3y) / avg(net_profit_3y) = 31.4% >= 30%', cite: 'c5' },
+          { label: '外汇敞口', val: '提示', status: 'amber', note: '套保额度 45 亿美元', formula: 'fx_hedge_limit(45e8 USD) / net_equity > 行业 90 分位', cite: 'c5' },
+          { label: '商誉占比', val: '4.6%', status: 'green', note: '低于 15% 预警线', formula: 'goodwill / equity = 4.6% < 15%', cite: 'c5' },
+          { label: '质押问询', val: '8.2% / 0次', status: 'green', note: '可控区间', formula: 'pledge_ratio = 8.2% < 30%, inquiry_1y = 0', cite: 'c5' }
+        ],
+        kpis: [
+          { name: '营业收入', fy: '2,540.6', q3: '1,962.5', pitQ3: '1,962.5', yoy: '+14.2%', cite: 'c5' },
+          { name: '归母净利', fy: '134.8', q3: '104.6', pitQ3: '104.6', yoy: '+18.1%', cite: 'c5' },
+          { name: '综合毛利率', fy: '11.6%', q3: '12.1%', pitQ3: '12.1%', yoy: '+0.5pct', cite: 'c5' },
+          { name: '套保额度($亿)', fy: '35.0', q3: '45.0', pitQ3: '35.0', yoy: '+28.6%', restated: true, cite: 'c5' },
+          { name: '加权 ROE', fy: '20.5%', q3: '21.4%', pitQ3: '21.4%', yoy: '+0.9pct', cite: 'c5' }
+        ],
+        filings: [
+          { date: '2026-11-24', tag: '风险提示', tone: 'amber', title: '关于 2027 年度开展外汇衍生品交易业务（45 亿美元额度）的公告', cite: 'c5' },
+          { date: '2026-10-27', tag: '三季报', tone: 'blue', title: '2026 年第三季度报告（汽车互联与 AI 服务器业务增长披露）', cite: 'c5' }
+        ],
+        series: {
+          qfq: [34.2, 35.1, 34.8, 36.0, 36.9, 37.2, 36.8, 38.4, 39.1, 38.7, 39.6, 40.1, 39.9, 40.42, 41.26],
+          hfq: [246, 252, 250, 259, 265, 267, 264, 276, 281, 278, 285, 288, 287, 290.8, 296.8],
+          raw: [34.6, 35.5, 35.2, 36.4, 37.3, 37.6, 36.8, 38.4, 39.1, 38.7, 39.6, 40.1, 39.9, 40.42, 41.26],
+          pe: [32, 29, 26, 24, 22, 21, 19, 17, 16, 17.5, 18.2, 19.4, 18.5, 18.6, 18.9],
+          rev: [560, 610, 650, 720, 612, 655, 695]
+        }
+      },
+      'NVDA.US': {
+        name: 'NVIDIA Corp.', ticker: 'NVDA.US', market: '美股 · NASDAQ (扩展样例)', currency: '$',
+        source: '主源：SEC EDGAR iXBRL + FMP Starter · 延迟：15 分钟',
+        price: { qfq: '162.40', hfq: '162.40', raw: '162.40' },
+        chgText: '+2.95 (+1.85%)', isUp: true, mcap: '市值 $3.98T',
+        pe: '41.2x', pePct: '46.0%', riskSummary: 'SEC 合规与审计：正常', riskTone: 'green',
+        eventNote: '10-Q iXBRL 数据中心毛利 73.8%',
+        guards: [
+          { label: 'SEC 申报', val: '正常', status: 'green', note: '10-Q 按期申报', formula: 'sec_filing_late_1y = 0, going_concern = FALSE', cite: 'c6' },
+          { label: 'Form 4', val: '常规计划', status: 'green', note: '10b5-1 预定减持', formula: 'unplanned_insider_sell_90d = 0', cite: 'c6' },
+          { label: 'FCF 转化', val: '94.2%', status: 'green', note: '现金转化极强', formula: 'fcf_ttm / net_income_ttm = 94.2%', cite: 'c6' },
+          { label: '客户集中', val: '46% (前4)', status: 'amber', note: '云巨头 Capex 依赖', formula: 'top4_cloud_revenue_share = 46% (10-Q 附注)', cite: 'c6' },
+          { label: '存货周转', val: '健康', status: 'green', note: 'Blackwell 备货', formula: 'dio_q3 = 98d vs 5Y avg 104d', cite: 'c6' },
+          { label: 'iXBRL 校验', val: '100%', status: 'green', note: '三表勾稽误差 0', formula: 'assets - (liabilities + equity) = 0.00 USD', cite: 'c6' }
+        ],
+        kpis: [
+          { name: '总营收 ($B)', fy: '130.5', q3: '41.8', pitQ3: '41.8', yoy: '+38.2%', cite: 'c6' },
+          { name: 'Data Center', fy: '115.2', q3: '37.4', pitQ3: '37.4', yoy: '+42.6%', cite: 'c6' },
+          { name: 'GAAP 毛利率', fy: '75.0%', q3: '73.8%', pitQ3: '73.8%', yoy: '-1.2pct', cite: 'c6' },
+          { name: 'FCF ($B)', fy: '68.4', q3: '21.2', pitQ3: '21.2', yoy: '+35.4%', cite: 'c6' },
+          { name: 'GAAP ROE', fy: '118.4%', q3: '109.2%', pitQ3: '109.2%', yoy: '-9.2pct', cite: 'c6' }
+        ],
+        filings: [
+          { date: '2026-11-20', tag: 'SEC 10-Q', tone: 'blue', title: 'Form 10-Q Quarterly Report (Inline XBRL Grounded)', cite: 'c6' },
+          { date: '2026-11-19', tag: '8-K 业绩', tone: 'green', title: 'Form 8-K Results of Operations & CFO Commentary', cite: 'c6' }
+        ],
+        series: {
+          qfq: [132, 136, 134, 141, 144, 142, 148, 151, 149, 154, 157, 155, 158, 159.45, 162.4],
+          hfq: [132, 136, 134, 141, 144, 142, 148, 151, 149, 154, 157, 155, 158, 159.45, 162.4],
+          raw: [132, 136, 134, 141, 144, 142, 148, 151, 149, 154, 157, 155, 158, 159.45, 162.4],
+          pe: [62, 58, 52, 48, 45, 42, 44, 46, 43, 40, 39, 41, 42, 40.6, 41.2],
+          rev: [28.1, 31.4, 35.1, 38.6, 39.2, 40.4, 41.8]
+        }
+      }
+    };
+
+    const CITATIONS = {
+      c1: {
+        title: '宁德时代：2026 年第三季度报告（正文及主要财务数据）',
+        coords: 'source: CNINFO · page: 4 / 38 · table: T_01 · bbox: [64, 192, 532, 238]',
+        hash: 'doc_sha256: 9f4e2a81c74b08e1...d30b · granularity: CELL_BBOX',
+        html: `
+          <div class="pdf-page">
+            <div class="pdf-page-head"><span>宁德时代新能源科技股份有限公司 2026 年第三季度报告</span><span>第 4 页 / 共 38 页</span></div>
+            <p><strong>一、主要会计数据和财务指标（单位：人民币亿元）</strong></p>
+            <table class="pdf-table">
+              <thead><tr><th>项目</th><th>2026 年 1–9 月</th><th>上年同期（重述后）</th><th>同比变动</th></tr></thead>
+              <tbody>
+                <tr><td>营业收入</td><td><span class="pdf-highlight">2,684.20</span></td><td>2,476.18</td><td>+8.40%</td></tr>
+                <tr><td>归属于上市公司股东的扣非净利润</td><td><span class="pdf-highlight">368.50</span></td><td>308.63</td><td><span class="pdf-highlight">+19.40%</span></td></tr>
+                <tr><td>综合销售毛利率（合并口径）</td><td><span class="pdf-highlight">28.40%</span></td><td>26.30%</td><td>+2.10pct</td></tr>
+              </tbody>
+            </table>
+            <p style="margin-top:8px;"><strong>经营进展摘要：</strong>报告期内，匈牙利一期产线爬坡稳步推进，<span class="pdf-highlight">二期电芯产线已进入欧洲核心主机厂验证阶段；北美市场继续以 LRS 技术授权轻资产模式合作</span>，神行与麒麟系列超充产品出货占比突破 40%。</p>
+          </div>`
+      },
+      c2: {
+        title: '宁德时代：2026Q3 财务附注与投资者关系活动记录表',
+        coords: 'source: CNINFO · page: 18 / 38 · table: T_07 · bbox: [70, 260, 520, 312]',
+        hash: 'doc_sha256: 3a71d0e5b91042aa...881c · granularity: CELL_BBOX',
+        html: `
+          <div class="pdf-page">
+            <div class="pdf-page-head"><span>现金流、资产质量及投资者问答纪要</span><span>第 18 页 / 共 38 页</span></div>
+            <table class="pdf-table">
+              <thead><tr><th>流动性与资本结构项</th><th>2026-09-30</th><th>2025-12-31</th></tr></thead>
+              <tbody>
+                <tr><td>货币资金及交易性金融资产（亿元）</td><td><span class="pdf-highlight">2,640.0</span></td><td>2,486.5</td></tr>
+                <tr><td>有息负债合计（亿元）</td><td><span class="pdf-highlight">1,220.0</span></td><td>1,294.0</td></tr>
+                <tr><td>经营活动现金流量净额 / 归母净利</td><td><span class="pdf-highlight">1.42x</span></td><td>1.56x</td></tr>
+              </tbody>
+            </table>
+            <p style="margin-top:8px;"><strong>管理层问答摘录：</strong>Q4 排产延续高景气，<span class="pdf-highlight">储能业务出货增速持续高于动力电池</span>；同时公司正密切跟踪欧洲政策变动与国内储能招投标价格竞争走势。</p>
+          </div>`
+      },
+      c3: {
+        title: '同行 2026Q3 财报横向抽样原文（比亚迪 / 国轩高科）',
+        coords: 'source: CNINFO · multi-doc bundle · page: 11 · granularity: PARAGRAPH_BBOX',
+        hash: 'doc_sha256: 7b22c8f4a01129ef...419a · verified: TRUE',
+        html: `
+          <div class="pdf-page">
+            <div class="pdf-page-head"><span>行业对比原文摘录 · 2026 年第三季度报告</span><span>溯源片段</span></div>
+            <p><strong>比亚迪（002594.SZ）第 11 页：</strong><span class="pdf-highlight">泰国与巴西整车基地已实现稳定量产交付，匈牙利基地建设稳步推进</span>；2026 年前三季度汽车及相关产品毛利率达 21.6%，预计全年海外销量同比翻倍以上。</p>
+            <p style="margin-top:10px;"><strong>国轩高科（002074.SZ）第 9 页：</strong><span class="pdf-highlight">德国哥廷根与摩洛哥超级工厂按节点推进</span>，重点保障大众标准电芯与海外储能集装箱订单兑现，2026Q3 经营性现金流/净利为 0.94x。</p>
+          </div>`
+      },
+      c4: {
+        title: '贵州茅台：2026 年第三季度报告（合同负债与渠道结构）',
+        coords: 'source: CNINFO · page: 6 / 24 · table: T_02 · bbox: [68, 174, 528, 224]',
+        hash: 'doc_sha256: 6e19b30c18f71a2d...90e1 · granularity: CELL_BBOX',
+        html: `
+          <div class="pdf-page">
+            <div class="pdf-page-head"><span>贵州茅台酒股份有限公司 2026 年第三季度报告</span><span>第 6 页 / 共 24 页</span></div>
+            <table class="pdf-table">
+              <thead><tr><th>关键运营与财务科目（亿元）</th><th>2026 年 1–9 月</th><th>上年同期</th><th>变动</th></tr></thead>
+              <tbody>
+                <tr><td>营业总收入</td><td><span class="pdf-highlight">1,298.40</span></td><td>1,215.73</td><td>+6.80%</td></tr>
+                <tr><td>期末合同负债</td><td><span class="pdf-highlight">98.40</span></td><td>111.95</td><td>-12.10%</td></tr>
+                <tr><td>直销渠道收入占比</td><td><span class="pdf-highlight">42.60%</span></td><td>44.50%</td><td>-1.90pct</td></tr>
+              </tbody>
+            </table>
+            <p style="margin-top:8px;">公司重申 2024–2026 年度现金分红规划，每年度分配现金红利总额<span class="pdf-highlight">不低于当年实现归母净利润的 75%</span>。</p>
+          </div>`
+      },
+      c5: {
+        title: '立讯精密：关于 2027 年度开展外汇衍生品套期保值业务的公告',
+        coords: 'source: CNINFO · page: 2 / 7 · section: S_02 · bbox: [64, 210, 526, 268]',
+        hash: 'doc_sha256: 4c80a5e9d33109fb...77c2 · granularity: PARAGRAPH_BBOX',
+        html: `
+          <div class="pdf-page">
+            <div class="pdf-page-head"><span>立讯精密工业股份有限公司 · 临时公告 2026-089</span><span>第 2 页 / 共 7 页</span></div>
+            <p><strong>二、拟开展外汇衍生品交易业务概述</strong></p>
+            <p style="margin-top:6px;">鉴于公司外销业务以美元结算为主，为有效防范汇率大幅波动对经营业绩的影响，公司及子公司拟开展<span class="pdf-highlight">任一交易日持有的最高合约价值不超过 45 亿美元（较上年度 35 亿美元上调 +28.6%）</span>的外汇衍生品套期保值业务，严禁投机交易。</p>
+          </div>`
+      },
+      c6: {
+        title: 'NVIDIA Corp. Form 10-Q (SEC EDGAR Inline XBRL)',
+        coords: 'source: SEC EDGAR · accession: 0001045810-26-000142 · DOM: ix-nonFraction-418',
+        hash: 'doc_sha256: 2d45f1c09e8211b4...12aa · granularity: IXBRL_FACT_ID',
+        html: `
+          <div class="pdf-page">
+            <div class="pdf-page-head"><span>UNITED STATES SEC · FORM 10-Q · NVIDIA CORP.</span><span>iXBRL Verified</span></div>
+            <table class="pdf-table">
+              <thead><tr><th>Segment / Metric (USD Billions)</th><th>Q3 FY27</th><th>YoY</th></tr></thead>
+              <tbody>
+                <tr><td>Total Revenue (us-gaap:Revenues)</td><td><span class="pdf-highlight">$41.80B</span></td><td>+38.2%</td></tr>
+                <tr><td>Data Center Segment Revenue</td><td><span class="pdf-highlight">$37.40B</span></td><td>+42.6%</td></tr>
+                <tr><td>GAAP Gross Margin</td><td><span class="pdf-highlight">73.8%</span></td><td>-1.2pct</td></tr>
+              </tbody>
+            </table>
+            <p style="margin-top:8px;">Note 14 Concentration: <span class="pdf-highlight">Four direct cloud service customers accounted for 46% of total revenue</span> during the nine months ended October 2026.</p>
+          </div>`
+      }
+    };
+
+    let currentStock = '300750.SZ';
+    let currentAdj = 'qfq';
+    let currentChartMode = 'kline';
+    let currentPit = 'latest';
+    let aiColAdded = false;
+
+    function renderWatchlist() {
+      const nav = document.getElementById('watchlistNav');
+      const cmdTable = document.getElementById('commandWatchlistTable');
+      nav.innerHTML = '';
+      cmdTable.innerHTML = '';
+      Object.values(STOCKS).forEach(s => {
+        const dotCls = s.riskTone === 'green' ? 'dot-green' : 'dot-amber';
+        const div = document.createElement('div');
+        div.className = 'watchlist-item' + (s.ticker === currentStock ? ' active' : '');
+        div.innerHTML = `
+          <div>
+            <div class="wl-name"><span class="status-dot ${dotCls}"></span>${s.name}</div>
+            <div class="wl-code">${s.ticker}</div>
+          </div>
+          <div class="wl-right">
+            <div class="wl-price">${s.price.qfq}</div>
+            <div class="wl-chg ${s.isUp ? 'up' : 'down'}">${s.chgText.split(' ')[1].replace(/[()]/g, '')}</div>
+          </div>`;
+        div.onclick = () => jumpToStock(s.ticker);
+        nav.appendChild(div);
+
+        const tr = document.createElement('tr');
+        tr.className = 'clickable';
+        tr.innerHTML = `
+          <td><strong>${s.name}</strong> <span class="mono" style="color:var(--text-muted);">${s.ticker}</span></td>
+          <td>${s.market}</td>
+          <td class="num">${s.currency}${s.price.qfq}</td>
+          <td class="num ${s.isUp ? 'up' : 'down'}">${s.chgText}</td>
+          <td class="num">${s.pe}</td>
+          <td class="num">${s.pePct}</td>
+          <td><span class="pill pill-${s.riskTone}">${s.riskSummary}</span></td>
+          <td style="color:var(--text-secondary);">${s.eventNote}</td>`;
+        tr.onclick = () => jumpToStock(s.ticker);
+        cmdTable.appendChild(tr);
+      });
+    }
+
+    function renderWorkspace() {
+      const s = STOCKS[currentStock];
+      document.getElementById('wsName').textContent = s.name;
+      document.getElementById('wsTicker').textContent = s.ticker;
+      document.getElementById('wsMarket').textContent = s.market;
+      const rb = document.getElementById('wsRiskBadge');
+      rb.textContent = s.riskSummary;
+      rb.className = 'pill pill-' + s.riskTone;
+      document.getElementById('wsSource').textContent = s.source;
+      document.getElementById('wsPrice').textContent = s.currency + s.price[currentAdj];
+      const chgEl = document.getElementById('wsChg');
+      chgEl.textContent = s.chgText;
+      chgEl.className = s.isUp ? 'up' : 'down';
+      document.getElementById('wsMcap').textContent = s.mcap;
+      document.getElementById('ctxStockChip').textContent = s.ticker + ' 画布';
+
+      // Guards
+      const gg = document.getElementById('guardGrid');
+      gg.innerHTML = '';
+      s.guards.forEach((g, idx) => {
+        const card = document.createElement('div');
+        card.className = 'guard-item' + (idx === 0 ? ' selected' : '');
+        const pillCls = g.status === 'green' ? 'pill-green' : 'pill-amber';
+        const badgeText = g.status === 'green' ? 'PASS' : 'WARN';
+        card.innerHTML = `
+          <div class="guard-top"><span class="guard-label">${g.label}</span><span class="pill ${pillCls} mono" style="padding:0 5px; font-size:9.5px;">${badgeText}</span></div>
+          <div class="guard-val">${g.val}</div>
+          <div class="guard-note">${g.note}</div>`;
+        card.onclick = () => {
+          gg.querySelectorAll('.guard-item').forEach(el => el.classList.remove('selected'));
+          card.classList.add('selected');
+          renderGuardDetail(g);
+        };
+        gg.appendChild(card);
+      });
+      renderGuardDetail(s.guards[0]);
+
+      // KPIs
+      const tbody = document.getElementById('kpiTableBody');
+      tbody.innerHTML = '';
+      s.kpis.forEach(k => {
+        const val = currentPit === 'latest' ? k.q3 : k.pitQ3;
+        const isRestated = currentPit === 'as_reported' && k.restated;
+        const tr = document.createElement('tr');
+        tr.innerHTML = `
+          <td>${k.name}<button class="cite-btn" data-cite="${k.cite}">[${k.cite.slice(1)}]</button></td>
+          <td class="num">${k.fy}</td>
+          <td class="num ${isRestated ? 'restated-cell' : ''}">${val}${isRestated ? ' *' : ''}</td>
+          <td class="num ${k.yoy.startsWith('+') ? 'up' : 'down'}">${k.yoy}</td>`;
+        tbody.appendChild(tr);
+      });
+      document.getElementById('pitNotice').innerHTML = currentPit === 'as_reported'
+        ? '<span class="pill pill-amber">PIT 当时已知视角</span> 高亮带 <code>*</code> 单元格表示该指标在后续公告中发生过追溯重述或额度上调，回测与历史研究严格读取此截面以防未来函数。'
+        : '所有数字均为 <span class="mono">Decimal</span> 确定性计算，点击角标直达原财报单元格。切换「当时已知 PIT」可审计历史追溯重述差异。';
+
+      // Filings
+      const ff = document.getElementById('filingsFeed');
+      ff.innerHTML = '';
+      s.filings.forEach(f => {
+        const div = document.createElement('div');
+        div.className = 'feed-item';
+        div.innerHTML = `
+          <div>
+            <div class="feed-title">${f.title}</div>
+            <div class="feed-meta"><span class="pill pill-${f.tone}">${f.tag}</span><span class="mono">${f.date}</span><span>已解析页码与单元格坐标</span></div>
+          </div>
+          <button class="btn" data-cite="${f.cite}">审计原文</button>`;
+        ff.appendChild(div);
+      });
+
+      renderChart();
+      renderWatchlist();
+    }
+
+    function renderGuardDetail(g) {
+      document.getElementById('guardDetailBar').innerHTML = `
+        <div><strong>${g.label} · 确定性审计公式：</strong><span class="mono">${g.formula}</span></div>
+        <button class="btn" style="height:24px; font-size:11px;" data-cite="${g.cite}">查看原始财报依据</button>`;
+    }
+
+    function renderChart() {
+      const s = STOCKS[currentStock];
+      const container = document.getElementById('chartContainer');
+      const legend = document.getElementById('chartLegend');
+      const title = document.getElementById('chartTitle');
+      const W = 620, H = 240, padL = 46, padR = 16, padT = 16, padB = 26;
+
+      if (currentChartMode === 'rev') {
+        title.textContent = `${s.name} · 近 7 季单季营收确定性柱状图`;
+        const data = s.series.rev;
+        const maxV = Math.max(...data) * 1.15;
+        const labels = ['25Q1','25Q2','25Q3','25Q4','26Q1','26Q2','26Q3'];
+        const bw = (W - padL - padR) / data.length;
+        let bars = '';
+        data.forEach((v, i) => {
+          const bh = ((v / maxV) * (H - padT - padB));
+          const x = padL + i * bw + bw * 0.22;
+          const y = H - padB - bh;
+          const fill = i === data.length - 1 ? 'var(--blue-fg)' : 'var(--border-strong)';
+          bars += `<rect x="${x.toFixed(1)}" y="${y.toFixed(1)}" width="${(bw*0.56).toFixed(1)}" height="${bh.toFixed(1)}" rx="3" fill="${fill}" />`;
+          bars += `<text x="${(x + bw*0.28).toFixed(1)}" y="${(y - 5).toFixed(1)}" text-anchor="middle" font-size="10" font-family="var(--font-mono)" fill="var(--text-secondary)">${v}</text>`;
+          bars += `<text x="${(x + bw*0.28).toFixed(1)}" y="${H - 8}" text-anchor="middle" font-size="10" font-family="var(--font-mono)" fill="var(--text-muted)">${labels[i]}</text>`;
+        });
+        container.innerHTML = `<svg class="chart-canvas" viewBox="0 0 ${W} ${H}">
+          <line x1="${padL}" y1="${H-padB}" x2="${W-padR}" y2="${H-padB}" stroke="var(--border)" />
+          ${bars}
+        </svg>`;
+        legend.innerHTML = `<span class="legend-item"><span class="legend-swatch" style="background:var(--blue-fg); height:8px;"></span>最新报告期 2026Q3（口径：合并单季）</span>`;
+        return;
+      }
+
+      const arr = currentChartMode === 'kline' ? s.series[currentAdj] : s.series.pe;
+      const minV = Math.min(...arr) * 0.94;
+      const maxV = Math.max(...arr) * 1.05;
+      const xStep = (W - padL - padR) / (arr.length - 1);
+      const yOf = v => padT + (1 - (v - minV) / (maxV - minV)) * (H - padT - padB);
+
+      let grid = '';
+      for (let i = 0; i <= 4; i++) {
+        const y = padT + (i / 4) * (H - padT - padB);
+        const val = maxV - (i / 4) * (maxV - minV);
+        grid += `<line x1="${padL}" y1="${y.toFixed(1)}" x2="${W-padR}" y2="${y.toFixed(1)}" stroke="var(--border)" stroke-dasharray="2 3" />`;
+        grid += `<text x="${padL - 6}" y="${(y + 3).toFixed(1)}" text-anchor="end" font-size="10" font-family="var(--font-mono)" fill="var(--text-muted)">${val.toFixed(1)}</text>`;
+      }
+
+      let body = '';
+      if (currentChartMode === 'kline') {
+        title.textContent = `${s.name} · 日 K 线与财报事件标点（${currentAdj === 'qfq' ? '前复权' : currentAdj === 'hfq' ? '后复权' : '不复权'}）`;
+        arr.forEach((close, i) => {
+          const prev = i === 0 ? close * 0.99 : arr[i - 1];
+          const open = prev;
+          const high = Math.max(open, close) * 1.012;
+          const low = Math.min(open, close) * 0.988;
+          const up = close >= open;
+          const col = up ? 'var(--red-fg)' : 'var(--green-fg)';
+          const x = padL + i * xStep;
+          const yTop = yOf(Math.max(open, close));
+          const yBot = yOf(Math.min(open, close));
+          const h = Math.max(2.5, yBot - yTop);
+          body += `<line x1="${x.toFixed(1)}" y1="${yOf(high).toFixed(1)}" x2="${x.toFixed(1)}" y2="${yOf(low).toFixed(1)}" stroke="${col}" stroke-width="1.2" />`;
+          body += `<rect x="${(x - 6).toFixed(1)}" y="${yTop.toFixed(1)}" width="12" height="${h.toFixed(1)}" rx="1" fill="${col}" />`;
+        });
+        const evX = padL + 11 * xStep;
+        body += `<line x1="${evX.toFixed(1)}" y1="${padT}" x2="${evX.toFixed(1)}" y2="${H-padB}" stroke="var(--blue-fg)" stroke-dasharray="3 3" />`;
+        body += `<rect x="${(evX-24).toFixed(1)}" y="${padT+2}" width="48" height="16" rx="3" fill="var(--blue-bg)" stroke="var(--blue-border)" />`;
+        body += `<text x="${evX.toFixed(1)}" y="${padT+13}" text-anchor="middle" font-size="9.5" font-family="var(--font-mono)" fill="var(--blue-fg)">Q3 财报</text>`;
+        legend.innerHTML = `
+          <span class="legend-item"><span class="legend-swatch" style="background:var(--red-fg); height:8px;"></span>阳线（红涨）</span>
+          <span class="legend-item"><span class="legend-swatch" style="background:var(--green-fg); height:8px;"></span>阴线（绿跌）</span>
+          <span class="legend-item"><span class="legend-swatch" style="background:var(--blue-fg);"></span>财报披露日 PIT 事件锚点</span>`;
+      } else {
+        title.textContent = `${s.name} · 5 年 PE-TTM 估值百分位带（当前 ${s.pe} · ${s.pePct} 分位）`;
+        const y20 = yOf(minV + (maxV - minV) * 0.25);
+        const y50 = yOf(minV + (maxV - minV) * 0.52);
+        const y80 = yOf(minV + (maxV - minV) * 0.78);
+        body += `<rect x="${padL}" y="${y80.toFixed(1)}" width="${W-padL-padR}" height="${(y20-y80).toFixed(1)}" fill="var(--blue-bg)" opacity="0.45" />`;
+        body += `<line x1="${padL}" y1="${y50.toFixed(1)}" x2="${W-padR}" y2="${y50.toFixed(1)}" stroke="var(--text-muted)" stroke-dasharray="4 3" />`;
+        const pts = arr.map((v, i) => `${(padL + i * xStep).toFixed(1)},${yOf(v).toFixed(1)}`).join(' ');
+        body += `<polyline fill="none" stroke="var(--accent-ink)" stroke-width="2" points="${pts}" />`;
+        const lx = padL + (arr.length - 1) * xStep, ly = yOf(arr[arr.length - 1]);
+        body += `<circle cx="${lx.toFixed(1)}" cy="${ly.toFixed(1)}" r="4" fill="var(--blue-fg)" />`;
+        legend.innerHTML = `
+          <span class="legend-item"><span class="legend-swatch" style="background:var(--accent-ink);"></span>PE-TTM 历史曲线</span>
+          <span class="legend-item"><span class="legend-swatch" style="background:var(--blue-bg); border:1px solid var(--blue-border); height:8px;"></span>20%–80% 历史合理估值带</span>
+          <span class="legend-item"><span class="legend-swatch" style="background:var(--text-muted);"></span>5 年中位数线</span>`;
+      }
+
+      container.innerHTML = `<svg class="chart-canvas" viewBox="0 0 ${W} ${H}">${grid}${body}</svg>`;
+    }
+
+    function renderDcfMatrix() {
+      const g5 = Number(document.getElementById('dcfGrowth').value) / 100;
+      document.getElementById('dcfGrowthVal').textContent = Math.round(g5 * 100) + '%';
+      const baseFcf = 495; // 亿元
+      const netCash = 1420;
+      const waccs = [0.08, 0.09, 0.10, 0.11];
+      const gs = [0.02, 0.025, 0.03, 0.035];
+      const tbody = document.getElementById('dcfMatrixBody');
+      tbody.innerHTML = '';
+      waccs.forEach(w => {
+        const tr = document.createElement('tr');
+        let cells = `<td class="mono"><strong>WACC = ${(w*100).toFixed(1)}%</strong></td>`;
+        gs.forEach(tg => {
+          let pv = 0, f = baseFcf;
+          for (let t = 1; t <= 5; t++) { f *= (1 + g5); pv += f / Math.pow(1 + w, t); }
+          const tv = (f * (1 + tg)) / (w - tg);
+          const ev = pv + tv / Math.pow(1 + w, 5);
+          const eq = Math.round(ev + netCash);
+          const active = w === 0.09 && tg === 0.025;
+          cells += `<td class="num ${active ? 'dcf-cell-active' : ''}">${eq.toLocaleString()}</td>`;
+        });
+        tr.innerHTML = cells;
+        tbody.appendChild(tr);
+      });
+    }
+
+    function switchView(viewId) {
+      document.querySelectorAll('.nav-item').forEach(el => el.classList.toggle('active', el.dataset.view === viewId));
+      document.querySelectorAll('.view-panel').forEach(el => el.classList.toggle('active', el.id === 'view-' + viewId));
+    }
+
+    function jumpToStock(ticker) {
+      currentStock = ticker;
+      renderWorkspace();
+      switchView('workspace');
+    }
+
+    function switchDock(tab) {
+      document.querySelectorAll('.dock-tab').forEach(el => el.classList.toggle('active', el.dataset.dock === tab));
+      document.querySelectorAll('.dock-pane').forEach(el => el.classList.toggle('active', el.id === 'dock-' + tab));
+      document.getElementById('dockStatusLabel').textContent = tab === 'citation' ? 'Audit Grounded' : 'MCP Ready';
+      const shell = document.getElementById('appShell');
+      if (shell.classList.contains('right-collapsed')) {
+        shell.classList.remove('right-collapsed');
+        document.getElementById('rightToggleBtn').textContent = '收起侧栏';
+      }
+    }
+
+    function openCitation(id) {
+      const c = CITATIONS[id] || CITATIONS.c1;
+      document.getElementById('citeDocTitle').textContent = c.title;
+      document.getElementById('citeCoords').textContent = c.coords;
+      document.getElementById('citeHash').textContent = c.hash;
+      document.getElementById('pdfViewerContent').innerHTML = c.html;
+      switchDock('citation');
+    }
+
+    function runSkill(cmd) {
+      switchDock('copilot');
+      const s = STOCKS[currentStock];
+      const stream = document.getElementById('chatStream');
+      const userMsg = document.createElement('div');
+      userMsg.className = 'msg user';
+      userMsg.innerHTML = `<div class="msg-role">You</div><div class="msg-bubble">${cmd} ${s.name} (${s.ticker})</div>`;
+      stream.appendChild(userMsg);
+
+      const citeId = s.guards[0].cite;
+      let trace = `▸ call get_financial_facts(${s.ticker}, pit='latest') -> 0 errors\n▸ call verify_citations() -> 100% grounded`;
+      let reply = '';
+      if (cmd === '/排雷体检') {
+        trace = `▸ call run_guojiutiao_guard(${s.ticker}) -> ${s.riskSummary}\n▸ call scan_inquiries(${s.ticker}, days=365) -> 0 records`;
+        reply = `<strong>${s.name} 确定性排雷结论</strong>：${s.riskSummary}。全部财务与退市规则均由确定性引擎核验，关键项如「${s.guards[0].label}: ${s.guards[0].val}」「${s.guards[3].label}: ${s.guards[3].val}」均已匹配原报依据<button class="cite-btn" data-cite="${citeId}">[${citeId.slice(1)}]</button>。`;
+      } else if (cmd === '/季报拆解') {
+        reply = `<strong>${s.name} 2026Q3 财报核心增量</strong>：核心指标「${s.kpis[0].name}」为 <span class="mono">${s.kpis[0].q3}</span>（同比 <span class="mono">${s.kpis[0].yoy}</span>），「${s.kpis[2].name}」为 <span class="mono">${s.kpis[2].q3}</span><button class="cite-btn" data-cite="${citeId}">[${citeId.slice(1)}]</button>。注：已核查 PIT 历史修订状态，点击左侧切换器可对比历史初报口径。`;
+      } else if (cmd === '/同行对比') {
+        reply = `已为你准备好动力电池 4 强横向对比矩阵（确定性财务列 + AI 溯源提取列），点击 <button class="btn" style="height:22px; font-size:11px; padding:0 6px;" onclick="switchView('grid')">打开同行对比矩阵</button> 即可逐格审计原文。`;
+      } else {
+        reply = `针对 <strong>${s.name}</strong> 已提炼 3 条可量化证伪红线（如核心毛利率阈值、现金流/净利连续跌破 0.90x 等），可在 <button class="btn" style="height:22px; font-size:11px; padding:0 6px;" onclick="switchView('research')">深度研报页</button> 一键绑定自动财报监控。`;
+      }
+
+      const aiMsg = document.createElement('div');
+      aiMsg.className = 'msg ai';
+      aiMsg.innerHTML = `<div class="msg-role">AlphaDesk Copilot · Skill Executed</div><div class="msg-bubble"><div class="tool-trace">${trace.replace(/\n/g, '<br/>')}</div>${reply}</div>`;
+      stream.appendChild(aiMsg);
+      stream.scrollTop = stream.scrollHeight;
+    }
+
+    // Global Event Wiring
+    document.querySelectorAll('.nav-item').forEach(el => {
+      el.onclick = () => switchView(el.dataset.view);
+    });
+    document.querySelectorAll('.dock-tab').forEach(el => {
+      el.onclick = () => switchDock(el.dataset.dock);
+    });
+    document.querySelectorAll('#adjToggle .seg-btn').forEach(btn => {
+      btn.onclick = () => {
+        document.querySelectorAll('#adjToggle .seg-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentAdj = btn.dataset.adj;
+        renderWorkspace();
+      };
+    });
+    document.querySelectorAll('#chartModeToggle .seg-btn').forEach(btn => {
+      btn.onclick = () => {
+        document.querySelectorAll('#chartModeToggle .seg-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentChartMode = btn.dataset.mode;
+        renderChart();
+      };
+    });
+    document.querySelectorAll('#pitToggle .seg-btn').forEach(btn => {
+      btn.onclick = () => {
+        document.querySelectorAll('#pitToggle .seg-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        currentPit = btn.dataset.pit;
+        renderWorkspace();
+      };
+    });
+    document.querySelectorAll('#briefTabGroup .seg-btn').forEach(btn => {
+      btn.onclick = () => {
+        document.querySelectorAll('#briefTabGroup .seg-btn').forEach(b => b.classList.remove('active'));
+        btn.classList.add('active');
+        const cat = btn.dataset.brief;
+        document.querySelectorAll('#briefCards .alert-card').forEach(c => {
+          c.style.display = (cat === 'all' || c.dataset.cat === cat) ? 'flex' : 'none';
+        });
+      };
+    });
+
+    // Delegate citation clicks everywhere
+    document.addEventListener('click', e => {
+      const btn = e.target.closest('[data-cite]');
+      if (btn) openCitation(btn.dataset.cite);
+    });
+
+    // Generative Grid: Add AI Column demo
+    document.getElementById('addAiColBtn').onclick = () => {
+      if (aiColAdded) return;
+      aiColAdded = true;
+      document.getElementById('addAiColBtn').textContent = '已并发抽取：资本开支规划';
+      const th = document.createElement('th');
+      th.style.minWidth = '195px';
+      th.innerHTML = '2026 资本开支节奏<br/><span class="pill pill-blue mono" style="margin-top:3px;">AI · 新抽取</span>';
+      document.getElementById('genGridHead').appendChild(th);
+      const texts = [
+        '全年 Capex 控节奏在 220 亿左右，聚焦匈牙利与神行产线改造，自由现金流充裕。<button class="cite-btn" data-cite="c2">[2]</button>',
+        '整车与海外本土化工厂资本开支保持扩张，电池端以内部需求匹配为主。<button class="cite-btn" data-cite="c3">[3]</button>',
+        '由重资产自建转向 CLS 轻资产合资，资本开支峰值已过。<button class="cite-btn" data-cite="c2">[2]</button>',
+        '受海外基地推进影响资本开支维持中高位，正优化有息负债结构。<button class="cite-btn" data-cite="c3">[3]</button>'
+      ];
+      document.querySelectorAll('#genGridBody tr').forEach((tr, i) => {
+        const td = document.createElement('td');
+        td.innerHTML = texts[i];
+        tr.appendChild(td);
+      });
+    };
+
+    // Trigger bind toggle
+    document.querySelectorAll('.trigger-bind-btn').forEach(b => {
+      b.onclick = () => {
+        b.classList.toggle('active-toggle');
+        b.textContent = b.classList.contains('active-toggle') ? '已绑定监控' : '绑定监控';
+      };
+    });
+
+    // DCF Slider
+    document.getElementById('dcfGrowth').oninput = renderDcfMatrix;
+
+    // Screener controls
+    document.querySelectorAll('#view-screener .chip').forEach(ch => {
+      ch.onclick = () => { document.getElementById('screenerInput').value = ch.dataset.q; };
+    });
+    document.getElementById('explainExcludeBtn').onclick = () => {
+      const box = document.getElementById('excludeExplainBox');
+      box.style.display = box.style.display === 'none' ? 'block' : 'none';
+    };
+    document.getElementById('runScreenerBtn').onclick = () => {
+      const q = document.getElementById('screenerInput').value.trim();
+      document.getElementById('screenerSql').textContent =
+`-- Compiled by Semantic DSL -> SQLGlot AST Whitelist (Read-Only)
+-- Prompt: ${q}
+SELECT l.symbol, l.name, f.roe_ttm, f.ocf_4q_pos, v.pe_ttm, v.pe_5y_pct, r.pledge_ratio
+FROM pit_financial_snapshot('2026-11-25') f
+JOIN valuation_snapshot('2026-11-25') v USING (issuer_id)
+JOIN risk_guard_snapshot('2026-11-25') r USING (issuer_id)
+JOIN active_listings('CN_A', '2026-11-25') l USING (issuer_id)
+WHERE l.is_st = FALSE AND f.roe_ttm > 0.15 AND r.pledge_ratio < 0.30
+ORDER BY v.pe_5y_pct ASC LIMIT 50;`;
+    };
+
+    // Copilot free input
+    function sendFreeChat() {
+      const inp = document.getElementById('chatInput');
+      const q = inp.value.trim();
+      if (!q) return;
+      inp.value = '';
+      const s = STOCKS[currentStock];
+      const stream = document.getElementById('chatStream');
+      stream.innerHTML += `<div class="msg user"><div class="msg-role">You</div><div class="msg-bubble">${q}</div></div>`;
+      const citeId = s.guards[0].cite;
+      stream.innerHTML += `<div class="msg ai"><div class="msg-role">AlphaDesk Copilot · Tool-Grounded</div><div class="msg-bubble"><div class="tool-trace">▸ call retrieve_grounded_evidence(${s.ticker}, query="${q.slice(0,18)}") -> 2 hits<br/>▸ compliance_guard -> PASS (no buy/sell signal)</div>已基于 <strong>${s.name}</strong> 最新 PIT 快照与财报原文检索完成。相关财务指标与披露事实均附带原文定位角标<button class="cite-btn" data-cite="${citeId}">[${citeId.slice(1)}]</button>，点击即可在右侧审计原始 PDF 表格。</div></div>`;
+      stream.scrollTop = stream.scrollHeight;
+    }
+    document.getElementById('chatSendBtn').onclick = sendFreeChat;
+    document.getElementById('chatInput').onkeydown = e => { if (e.key === 'Enter') sendFreeChat(); };
+
+    // Topbar toggles
+    document.getElementById('prdToggleBtn').onclick = function() {
+      document.body.classList.toggle('show-prd');
+      this.classList.toggle('active-toggle');
+    };
+    document.getElementById('themeToggleBtn').onclick = function() {
+      const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+      document.documentElement.setAttribute('data-theme', isDark ? 'light' : 'dark');
+      this.textContent = isDark ? '深色终端' : '浅色编辑';
+    };
+    document.getElementById('rightToggleBtn').onclick = function() {
+      const collapsed = document.getElementById('appShell').classList.toggle('right-collapsed');
+      this.textContent = collapsed ? '展开侧栏' : '收起侧栏';
+    };
+
+    // Cmd+K Search Modal
+    const modal = document.getElementById('searchModal');
+    const modalInput = document.getElementById('modalSearchInput');
+    function renderModalList(filter = '') {
+      const box = document.getElementById('modalResults');
+      const kw = filter.toLowerCase();
+      box.innerHTML = '';
+      Object.values(STOCKS).filter(s =>
+        s.name.toLowerCase().includes(kw) || s.ticker.toLowerCase().includes(kw) || s.market.toLowerCase().includes(kw)
+      ).forEach(s => {
+        const row = document.createElement('div');
+        row.className = 'modal-row';
+        row.innerHTML = `<div><strong>${s.name}</strong> <span class="mono" style="color:var(--text-muted);">${s.ticker}</span></div><span class="pill pill-${s.riskTone}">${s.pe} · ${s.pePct} 分位</span>`;
+        row.onclick = () => { modal.classList.remove('open'); jumpToStock(s.ticker); };
+        box.appendChild(row);
+      });
+    }
+    document.getElementById('openSearchBtn').onclick = () => {
+      modal.classList.add('open'); modalInput.value = ''; renderModalList(); modalInput.focus();
+    };
+    modal.onclick = e => { if (e.target === modal) modal.classList.remove('open'); };
+    modalInput.oninput = () => renderModalList(modalInput.value);
+    document.addEventListener('keydown', e => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
+        e.preventDefault(); modal.classList.add('open'); modalInput.value = ''; renderModalList(); modalInput.focus();
+      } else if (e.key === 'Escape') {
+        modal.classList.remove('open');
+      }
+    });
+
+    // Init (supports optional URL params: ?view=command|workspace|grid|research|screener&cite=c1&theme=dark&prd=1)
+    renderWorkspace();
+    renderDcfMatrix();
+    openCitation('c1');
+    switchDock('copilot');
+    const params = new URLSearchParams(window.location.search);
+    if (params.get('view')) switchView(params.get('view'));
+    if (params.get('cite')) openCitation(params.get('cite'));
+    if (params.get('theme') === 'dark') {
+      document.documentElement.setAttribute('data-theme', 'dark');
+      document.getElementById('themeToggleBtn').textContent = '浅色编辑';
+    }
+    if (params.get('prd') === '1') {
+      document.body.classList.add('show-prd');
+      document.getElementById('prdToggleBtn').classList.add('active-toggle');
+    }
+  </script>
+</body>
+</html>
